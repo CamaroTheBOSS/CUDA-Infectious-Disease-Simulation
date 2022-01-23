@@ -77,7 +77,18 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp" />
+    <ClCompile Include="randomf.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Agent.cuh" />
+    <ClInclude Include="Disease.cuh" />
+    <ClInclude Include="parallel.cuh" />
+    <ClInclude Include="parameters.h" />
+    <ClInclude Include="Place.cuh" />
+    <ClInclude Include="randomf.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <CudaCompile Include="parallel.cu" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
