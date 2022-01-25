@@ -1,22 +1,214 @@
 #include "parallel.cuh"
+#include <chrono>
 
-
-
-struct xd
+__device__ void SwapDevice(Agent* agent1, Agent* agent2)
 {
-	int xd1 = 1;
-	int xd2 = 2;
-	float xd3 = 3;
+	Agent temp = *agent1;
+	*agent1 = *agent2;
+	*agent2 = temp;
+}
 
-};
+__device__ bool testAgent(Agent agent, float infProb, curandState state) //test for coweed, if 1: positive, if 0: negative
+{
+	float x = curand_uniform(&state);
 
-__global__ void NextDay()
+
+	float ressistanceComponent = agent.ressistance * infProb;
+	float vacRessist = infProb * agent.vacRessist / vaccinTime;
+
+	infProb -= ressistanceComponent + vacRessist;
+	//printf("%f\n", infProb);
+	if (x > infProb)
+	{
+		return 0;
+	}
+	return 1;
+}
+
+__device__ float calculateInfectionProbability(Agent agents[], Disease disease, Place place, int border, bool even, int blockidx, int blocksize)
+{
+	float infectionprob;
+
+	// Infection Variables (increase infection probability)
+	float infectionComponent = 0; // aritmetic average of probabilities for infecting someone other by each infected Agent
+	float nAgentsComponent = 0; // infected agents to all the agents in given place ratio
+	float diseaseComponent = 0; // disease influence
+	float placeComponent = 0; // more contactable places gives bigger chance for getting infected
+
+	int nInfected = 0;
+	if (even)
+	{
+		for (int j = 0; j < border; j++)
+		{			
+			if (agents[j].state == 1)
+			{
+				
+				infectionComponent += agents[j].infectProb;
+				nInfected++;
+				if (agents[j].masked)
+					{
+						infectionComponent -= agents[j].infectProb * 0.5;
+					}
+			}			
+		}
+		//TODO BETTER MODEL
+		infectionComponent /= (nInfected + 1);
+		nAgentsComponent = nInfected / (border + 1);
+		diseaseComponent = disease.contagiousness * nInfected / (border + 1);
+		placeComponent = place.contactFactor * nInfected / (border + 1);
+		infectionprob = infectionComponent + nAgentsComponent + diseaseComponent + placeComponent;
+		//printf("infComp: %f, nAgentsComp: %d, diseaseComp: %f, placeComp: %f\n", infectionComponent, nInfected, diseaseComponent, placeComponent);
+	}
+	else
+	{
+		for (int j = border; j < blocksize; j++)
+		{
+			if (agents[j].state == 1)
+			{
+				infectionComponent += agents[j].infectProb;
+				nInfected++;
+				if (agents[j].masked)
+				{
+					infectionComponent -= agents[j].infectProb * 0.5;
+				}
+			}
+		}
+		//TODO BETTER MODEL
+		infectionComponent /= (nInfected + 1);
+		nAgentsComponent = nInfected / (blocksize - border + 1);
+		diseaseComponent = disease.contagiousness * nInfected / (blocksize - border + 1);
+		placeComponent = place.contactFactor * nInfected / (blocksize - border + 1);
+		infectionprob = infectionComponent + nAgentsComponent + diseaseComponent + placeComponent;
+	}
+
+	if (infectionprob > 1)
+	{
+		infectionprob = 1;
+	}
+	//printf("%f\n", infectionprob);
+	return infectionprob;
+}
+
+__global__ void InfectionTest(Agent* agents, Disease* disease, Place* places, curandState* states, int* borders, int BlockSize)
 {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	extern __shared__ Agent sharedAgents[];
+	extern __shared__ Disease sharedDisease;
+	extern __shared__ Place sharedPlaces[2];
+	__shared__ int sharedBorders;
+
+	sharedAgents[threadIdx.x] = agents[i];
+	sharedDisease = disease[0];
+	sharedPlaces[0] = places[blockIdx.x * 2];
+	sharedPlaces[1] = places[blockIdx.x * 2 + 1];
+	sharedBorders = borders[blockIdx.x];
+	__syncthreads();
+	
 	if (i < nAgents)
 	{
-			
-	}	
+		float infProb;
+		int nThreads;
+		if (threadIdx.x < borders[blockIdx.x])
+		{
+			nThreads = BlockSize - borders[blockIdx.x];
+			infProb = calculateInfectionProbability(sharedAgents, sharedDisease, sharedPlaces[0], sharedBorders, true, blockIdx.x, BlockSize);
+		}
+		else
+		{
+			nThreads = borders[blockIdx.x];
+			infProb = calculateInfectionProbability(sharedAgents, sharedDisease, sharedPlaces[1], sharedBorders, false, blockIdx.x, BlockSize);
+		}
+		if (sharedAgents[threadIdx.x].state == 0)
+		{
+			if (testAgent(agents[i], infProb, states[i]))
+			{
+				agents[i].state = 1;
+				//printf("Im sick :(\n");
+			}			
+		}
+	}
+	
+}
+
+__global__ void BitonicSortStep(Agent* agents, curandState* states, int j, int k)
+{
+	unsigned int i, ixj;
+	i = threadIdx.x + blockDim.x * blockIdx.x;
+	ixj = i ^ j;
+	if (i < nAgents)
+	{
+		if ((ixj) > i)
+		{
+			int x = curand_uniform(&states[i]) * nAgents;
+			int y = curand_uniform(&states[i]) * nAgents;
+			if ((i & k) == 0)
+			{
+				if (x > y)
+				{
+					SwapDevice(&agents[i], &agents[ixj]);
+				}
+			}
+			else if ((i & k) != 0)
+			{
+				if (x < y)
+				{
+					SwapDevice(&agents[i], &agents[ixj]);
+				}
+			}
+		}
+	}
+	
+}
+
+__global__ void DefineBorders(int* borders, int BlockSize, curandState* states)
+{
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	borders[i] = curand_uniform(&states[i]) * BlockSize;
+}
+
+__global__ void InitSeeds(curandState* states, long int seed)
+{
+	int i = threadIdx.x + blockDim.x * blockIdx.x;
+
+	if (i < nAgents)
+	{
+		seed += i;
+		curand_init(seed, i, 0, &states[i]);
+	}
+}
+
+__global__ void InitAgentss(Agent* agents, curandState* states)
+{
+	int i = threadIdx.x + blockDim.x * blockIdx.x;
+	__shared__ float sharedMaxDeath;
+	__shared__ float sharedMaxRessistance;
+	__shared__ float sharedMaxInfect;
+	sharedMaxDeath = maxDeathProb;
+	sharedMaxRessistance = maxRessistanceParameter;
+	sharedMaxInfect = maxInfectProb;
+
+	agents[i].deathProb = curand_uniform(&states[i]) * sharedMaxDeath;
+	agents[i].ressistance = curand_uniform(&states[i]) * sharedMaxRessistance;
+	agents[i].infectProb = curand_uniform(&states[i]) * sharedMaxInfect;
+	float x = curand_uniform(&states[i]);
+	if (x < nInfectedAgents)
+	{
+		agents[i].state = 1;
+		//printf("Start Root :(\n");
+	}
+}
+
+__global__ void InitDiseasee(Disease* disease)
+{
+	disease[0].contagiousness = Dcontagiousness;
+	disease[0].duration = Dduration;
+}
+
+__global__ void InitPlacess(Place* places, curandState* states)
+{
+	int i = threadIdx.x + blockDim.x * blockIdx.x;
+	places[2 * i].contactFactor = curand_uniform(&states[i]) * maxExtavertizm;
+	places[2 * i + 1].contactFactor = curand_uniform(&states[i]) * maxExtavertizm;
 }
 
 __host__ void GetDeviceParameters(uint& BlockNum, uint& BlockSize)
@@ -29,36 +221,8 @@ __host__ void GetDeviceParameters(uint& BlockNum, uint& BlockSize)
 		BlockSize = nAgents;
 }
 
-__host__ void InitAgents(Agent* &agents)
-{
-	for (int i = 0; i < nAgents; i++)
-	{
-		agents[i].deathProb = floatRand(0, maxDeathProb);
-		agents[i].extrovertizm = floatRand(0, maxExtravertizmParameter);
-		agents[i].getInfectedProb = floatRand(0, maxGetInfectedValue);
-		agents[i].infectProb = floatRand(0, maxInfectProb);
-	}
-}
-
-__host__ void InitPlaces(Place* &places)
-{
-	for (int i = 0; i < nPlaces; i++)
-	{
-		places[i].cap = avrCapacity + intRand(-standardDeviation, standardDeviation);
-		places[i].contactFactor = floatRand(0, 1);
-	}
-}
-
-__host__ void InitDisease(Disease* &disease)
-{
-		disease[0].contagiousness = Dcontagiousness;
-		disease[0].duration = Dduration;
-}
-
 int main()
 {
-	srand(time(NULL));
-
 	// Get device parameters to send data asynchronously and specify number of blocks and threads for each block
 	int device = cudaGetDevice(&device);
 	uint BlockNum = 0;
@@ -66,19 +230,26 @@ int main()
 	GetDeviceParameters(BlockNum, BlockSize);
 	printf("BlockNum, BlockSize: %d, %d\n", BlockNum, BlockSize);
 
+	// Initialize randomness for each thread
+	std::srand(std::time(NULL));
+	curandState* states;
+	cudaMalloc(&states, sizeof(curandState) * nAgents);
+	InitSeeds << <BlockNum, BlockSize>> > (states, std::clock());
+
+
+	//Malloc interior variables
+	int* borders;
+	cudaMalloc((void**)&borders, sizeof(int) * BlockNum);
+	
 
 	// Malloc memory for arrays with information about infected, healthy and convalescent agents number (Outputs)
 	uint* infected;
 	uint* healthy;
 	uint* convalescent;
 	size_t OutputSize = sizeof(uint) * simTime;
-	cudaMallocManaged(&infected, OutputSize);
-	cudaMallocManaged(&healthy, OutputSize);
-	cudaMallocManaged(&convalescent, OutputSize);
-	// Make Prefetchs for outputs
-	cudaMemPrefetchAsync(infected, OutputSize, device, NULL); // ptr, size_t, device, stream
-	cudaMemPrefetchAsync(healthy, OutputSize, device, NULL);
-	cudaMemPrefetchAsync(convalescent, OutputSize, device, NULL);
+	cudaMalloc((void**)&infected, OutputSize);
+	cudaMalloc((void**)&healthy, OutputSize);
+	cudaMalloc((void**)&convalescent, OutputSize);
 	
 
 	// Allocate agents, places and disease in unified memory
@@ -87,35 +258,49 @@ int main()
 	Place* places;
 	size_t AgentSize = sizeof(Agent) * nAgents;
 	size_t DiseaseSize = sizeof(Disease);
-	size_t PlacesSize = sizeof(Place) * nPlaces;
-	cudaMallocManaged(&agents, AgentSize);
-	cudaMallocManaged(&disease, DiseaseSize);
-	cudaMallocManaged(&places, PlacesSize);
+	size_t PlacesSize = sizeof(Place) * 2 * BlockNum;
+	cudaMalloc((void**)&agents, AgentSize);
+	cudaMalloc((void**)&disease, DiseaseSize);
+	cudaMalloc((void**)&places, PlacesSize);
+
 	
+	InitAgentss << <BlockNum, BlockSize, sizeof(float) * 3 >> > (agents, states);
+	InitDiseasee << <1, 1 >> > (disease);
+	InitPlacess << <BlockNum, 1 >> > (places, states);
 
-	// Memory hints 
-	cudaMemAdvise(agents, AgentSize, cudaMemAdviseSetPreferredLocation, cudaCpuDeviceId); // Start on CPU
-	cudaMemAdvise(disease, DiseaseSize, cudaMemAdviseSetPreferredLocation, cudaCpuDeviceId);
-	cudaMemAdvise(places, PlacesSize, cudaMemAdviseSetPreferredLocation, cudaCpuDeviceId);
-	InitAgents(agents);
-	InitPlaces(places);
-	InitDisease(disease);
-	// Prefetch agents to gpu 
-	cudaMemPrefetchAsync(agents, AgentSize, device, NULL);
-	cudaMemPrefetchAsync(disease, DiseaseSize, device, NULL);
-	cudaMemPrefetchAsync(places, PlacesSize, device, NULL);
 
+	size_t sharedSize = BlockSize * sizeof(Agent) + sizeof(Disease) + sizeof(Place) * 2 + sizeof(int);
+	auto t3 = std::chrono::steady_clock::now();
 	for (int i = 0; i < simTime; i++)
 	{
-		NextDay << <BlockNum, BlockSize >> > ();
+		auto t1 = std::chrono::steady_clock::now();
+		for (int dayPart = 0; dayPart < nJourney; dayPart++)
+		{
+			DefineBorders << <BlockNum, 1 >> > (borders, BlockSize, states);
+			cudaDeviceSynchronize();
+			InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize);
+			cudaDeviceSynchronize();
+
+			//TODO check if bitonic shuffling is copying agents (by checking how many infected agents are in output list)
+			for (int k = 2; k <= BlockSize * BlockNum; k <<= 1)
+			{
+				for (int j = k >> 1; j > 0; j = j >> 1)
+				{
+					BitonicSortStep << <BlockNum, BlockSize >> > (agents, states, j, k);
+				}
+			}
+		}
+		auto t2 = std::chrono::steady_clock::now();
+		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
+		printf("END OF THE DAY ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
 	}
 	cudaDeviceSynchronize();
-
-	//Get back the outputs
-	cudaMemPrefetchAsync(infected, OutputSize, cudaCpuDeviceId);
-	cudaMemPrefetchAsync(healthy, OutputSize, cudaCpuDeviceId);
-	cudaMemPrefetchAsync(convalescent, OutputSize, cudaCpuDeviceId);
-
-
+	auto t4 = std::chrono::steady_clock::now();
+	
+	
+	cudaFree(agents); cudaFree(disease); cudaFree(infected); cudaFree(healthy); cudaFree(convalescent); cudaFree(states);
+	//for (int i = 0; i < nPlaces; i++)
+		//cudaFree(places[i].residents);
+	cudaFree(places);
 	return 0;
 }
