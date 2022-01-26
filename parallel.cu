@@ -123,6 +123,7 @@ __global__ void InfectionTest(Agent* agents, Disease* disease, Place* places, cu
 			if (testAgent(agents[i], infProb, states[i]))
 			{
 				agents[i].state = 1;
+				agents[i].sickDaysLeft = Dduration;
 				//printf("Im sick :(\n");
 			}			
 		}
@@ -166,6 +167,63 @@ __global__ void DefineBorders(int* borders, int BlockSize, curandState* states)
 	borders[i] = curand_uniform(&states[i]) * BlockSize;
 }
 
+__global__ void MaskingAgents(Agent* agents, curandState* states)
+{
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i < nAgents)
+	{
+		int x = curand_uniform(&states[i]);
+		if (x < agents[i].swapMaskProb)
+		{
+			if (agents[i].masked)
+				agents[i].masked = false;
+			else
+				agents[i].masked = true;
+		}
+	}
+}
+
+__global__ void VaccinatingAgents(Agent* agents, curandState* states)
+{
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i < nAgents)
+	{
+		int x = curand_uniform(&states[i]);
+		if ((x < agents[i].vaccinWill) && (agents[i].vacRessist == 0))
+		{
+			agents[i].vacRessist == vaccinTime;
+		}
+	}
+}
+
+__global__ void testDeath(Agent* agents, curandState* states)
+{
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	if ((i < nAgents) && (agents[i].state == 1))
+	{
+		int x = curand_uniform(&states[i]);
+		if (x < agents[i].deathProb)
+		{
+			agents[i].state = 3; //death
+			//printf("Im dead :(\n");
+		}
+	}
+}
+
+__global__ void healingAgents(Agent* agents)
+{
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	if (i < nAgents)
+	{
+
+	}
+}
+
+__global__ void diseaseMutuation(Disease* disease)
+{
+
+}
+
 __global__ void InitSeeds(curandState* states, long int seed)
 {
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -183,13 +241,19 @@ __global__ void InitAgentss(Agent* agents, curandState* states)
 	__shared__ float sharedMaxDeath;
 	__shared__ float sharedMaxRessistance;
 	__shared__ float sharedMaxInfect;
+	__shared__ float sharedmaxVaccinWill;
+	__shared__ float sharedMaxSwapMaskProb;
 	sharedMaxDeath = maxDeathProb;
 	sharedMaxRessistance = maxRessistanceParameter;
 	sharedMaxInfect = maxInfectProb;
+	sharedmaxVaccinWill = maxVaccinProb;
+	sharedMaxSwapMaskProb = maxSwapMaskProb;
 
 	agents[i].deathProb = curand_uniform(&states[i]) * sharedMaxDeath;
 	agents[i].ressistance = curand_uniform(&states[i]) * sharedMaxRessistance;
 	agents[i].infectProb = curand_uniform(&states[i]) * sharedMaxInfect;
+	agents[i].vaccinWill = curand_uniform(&states[i]) * sharedmaxVaccinWill;
+	agents[i].swapMaskProb = curand_uniform(&states[i]) * sharedMaxSwapMaskProb;
 	float x = curand_uniform(&states[i]);
 	if (x < nInfectedAgents)
 	{
@@ -262,9 +326,9 @@ int main()
 	cudaMalloc((void**)&agents, AgentSize);
 	cudaMalloc((void**)&disease, DiseaseSize);
 	cudaMalloc((void**)&places, PlacesSize);
-
 	
-	InitAgentss << <BlockNum, BlockSize, sizeof(float) * 3 >> > (agents, states);
+	
+	InitAgentss << <BlockNum, BlockSize, sizeof(float) * 5 >> > (agents, states);
 	InitDiseasee << <1, 1 >> > (disease);
 	InitPlacess << <BlockNum, 1 >> > (places, states);
 
@@ -280,7 +344,6 @@ int main()
 			cudaDeviceSynchronize();
 			InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize);
 			cudaDeviceSynchronize();
-
 			//TODO check if bitonic shuffling is copying agents (by checking how many infected agents are in output list)
 			for (int k = 2; k <= BlockSize * BlockNum; k <<= 1)
 			{
@@ -290,6 +353,15 @@ int main()
 				}
 			}
 		}
+		MaskingAgents << <BlockNum, BlockSize >> > (agents, states);
+		VaccinatingAgents << <BlockNum, BlockSize >> > (agents, states);
+		testDeath << <BlockNum, BlockSize >> > (agents, states);
+		diseaseMutuation << <1, 1 >> > (disease);
+		cudaDeviceSynchronize();
+
+		healingAgents << <BlockNum, BlockSize >> > (agents);
+		cudaDeviceSynchronize();
+
 		auto t2 = std::chrono::steady_clock::now();
 		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
 		printf("END OF THE DAY ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------\n");
