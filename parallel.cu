@@ -172,7 +172,7 @@ __global__ void MaskingAgents(Agent* agents, curandState* states)
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	if (i < nAgents)
 	{
-		int x = curand_uniform(&states[i]);
+		float x = curand_uniform(&states[i]);
 		if (x < agents[i].swapMaskProb)
 		{
 			if (agents[i].masked)
@@ -188,7 +188,7 @@ __global__ void VaccinatingAgents(Agent* agents, curandState* states)
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	if (i < nAgents)
 	{
-		int x = curand_uniform(&states[i]);
+		float x = curand_uniform(&states[i]);
 		if ((x < agents[i].vaccinWill) && (agents[i].vacRessist == 0))
 		{
 			agents[i].vacRessist == vaccinTime;
@@ -201,7 +201,7 @@ __global__ void testDeath(Agent* agents, curandState* states)
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	if ((i < nAgents) && (agents[i].state == 1))
 	{
-		int x = curand_uniform(&states[i]);
+		float x = curand_uniform(&states[i]);
 		if (x < agents[i].deathProb)
 		{
 			agents[i].state = 3; //death
@@ -215,13 +215,28 @@ __global__ void healingAgents(Agent* agents)
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	if (i < nAgents)
 	{
-
+		if (agents[i].sickDaysLeft != 0)
+		{
+			agents[i].sickDaysLeft--;
+			if (agents[i].sickDaysLeft == 0)
+				agents[i].state = 2; //convalescent
+		}
+		if (agents[i].vacRessist != 0)
+		{
+			agents[i].vacRessist--;
+		}		
 	}
 }
 
-__global__ void diseaseMutuation(Disease* disease)
+__global__ void diseaseMutuation(Disease* disease, curandState* states)
 {
-
+	int i = threadIdx.x + blockIdx.x * blockDim.x;
+	float x = curand_uniform(&states[i]);
+	if (x < mutuationProb)
+	{
+		x = curand_uniform(&states[i]) * 2 - 1;
+		disease[0].contagiousness += x * mutuationIntensity * disease[0].contagiousness;
+	}
 }
 
 __global__ void InitSeeds(curandState* states, long int seed)
@@ -275,6 +290,15 @@ __global__ void InitPlacess(Place* places, curandState* states)
 	places[2 * i + 1].contactFactor = curand_uniform(&states[i]) * maxExtavertizm;
 }
 
+__global__ void SumAgentsByStates(Agent* agents, uint* infected, uint* healthy, uint* convalescent, uint* dead)
+{
+	int i = threadIdx.x + blockDim.x * blockIdx.x;
+	if (i < nAgents)
+	{
+
+	}
+}
+
 __host__ void GetDeviceParameters(uint& BlockNum, uint& BlockSize)
 {
 	cudaDeviceProp deviceProp;
@@ -310,10 +334,12 @@ int main()
 	uint* infected;
 	uint* healthy;
 	uint* convalescent;
+	uint* dead;
 	size_t OutputSize = sizeof(uint) * simTime;
 	cudaMalloc((void**)&infected, OutputSize);
 	cudaMalloc((void**)&healthy, OutputSize);
 	cudaMalloc((void**)&convalescent, OutputSize);
+	cudaMalloc((void**)&dead, OutputSize);
 	
 
 	// Allocate agents, places and disease in unified memory
@@ -356,7 +382,7 @@ int main()
 		MaskingAgents << <BlockNum, BlockSize >> > (agents, states);
 		VaccinatingAgents << <BlockNum, BlockSize >> > (agents, states);
 		testDeath << <BlockNum, BlockSize >> > (agents, states);
-		diseaseMutuation << <1, 1 >> > (disease);
+		diseaseMutuation << <1, 1 >> > (disease, states);
 		cudaDeviceSynchronize();
 
 		healingAgents << <BlockNum, BlockSize >> > (agents);
@@ -370,9 +396,6 @@ int main()
 	auto t4 = std::chrono::steady_clock::now();
 	
 	
-	cudaFree(agents); cudaFree(disease); cudaFree(infected); cudaFree(healthy); cudaFree(convalescent); cudaFree(states);
-	//for (int i = 0; i < nPlaces; i++)
-		//cudaFree(places[i].residents);
-	cudaFree(places);
+	cudaFree(agents); cudaFree(disease); cudaFree(infected); cudaFree(healthy); cudaFree(convalescent); cudaFree(dead); cudaFree(states); cudaFree(places);
 	return 0;
 }

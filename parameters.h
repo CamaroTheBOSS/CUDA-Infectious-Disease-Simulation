@@ -13,7 +13,7 @@
 #define maxVaccinProb 0.2         // max will for beeing vaccinated
 
 // Disease parameters ----------------------------------------------
-#define mutuationProb 0.01      //chance for disease mutuation each day
+#define mutuationProb 0.003      //chance for disease mutuation each day
 #define mutuationIntensity 0.1 //defines each mutuation's influence
 #define Dcontagiousness 0.05   //probability for getting infected by disease
 #define Dduration 14         //avarage disease's duration
