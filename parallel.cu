@@ -1,4 +1,5 @@
 #include "parallel.cuh"
+#include "CPU.h"
 #include <chrono>
 
 __device__ void SwapDevice(Agent* agent1, Agent* agent2)
@@ -46,18 +47,18 @@ __device__ float calculateInfectionProbability(Agent agents[], Disease disease, 
 				infectionComponent += agents[j].infectProb;
 				nInfected++;
 				if (agents[j].masked)
-					{
-						infectionComponent -= agents[j].infectProb * 0.5;
-					}
+				{
+					infectionComponent -= agents[j].infectProb * maskEffectivness;
+				}
 			}			
 		}
 		//TODO BETTER MODEL
 		infectionComponent /= (nInfected + 1);
-		nAgentsComponent = nInfected / (border + 1);
-		diseaseComponent = disease.contagiousness * nInfected / (border + 1);
-		placeComponent = place.contactFactor * nInfected / (border + 1);
+		nAgentsComponent = infectionComponent * (float)nInfected / (float)(border + 1);
+		diseaseComponent = disease.contagiousness * nInfected / (float)(border + 1);
+		placeComponent = place.contactFactor * nInfected / (float)(border + 1);
 		infectionprob = infectionComponent + nAgentsComponent + diseaseComponent + placeComponent;
-		//printf("infComp: %f, nAgentsComp: %d, diseaseComp: %f, placeComp: %f\n", infectionComponent, nInfected, diseaseComponent, placeComponent);
+		//printf("infComp: %f, nAgentsComp: %f, diseaseComp: %f, placeComp: %f\n", infectionComponent, nAgentsComponent, diseaseComponent, placeComponent);
 	}
 	else
 	{
@@ -427,119 +428,150 @@ __host__ void PrintOutputs(int* healthy, int* infected, int* convalescent, int* 
 	}
 }
 
+/*__host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int* died)
+{
+
+}*/
+
 int main()
 {
-	// Get device parameters to send data asynchronously and specify number of blocks and threads for each block
-	int device = cudaGetDevice(&device);
-	uint BlockNum = 0;
-	uint BlockSize = 0;
-	GetDeviceParameters(BlockNum, BlockSize);
-	printf("BlockNum, BlockSize: %d, %d\n", BlockNum, BlockSize);
+	bool GPU_ON = 0;
 
-	// Initialize randomness for each thread
-	std::srand(std::time(NULL));
-	curandState* states;
-	cudaMalloc(&states, sizeof(curandState) * nAgents);
-	InitSeeds << <BlockNum, BlockSize>> > (states, std::clock());
-
-
-	//Malloc interior variables
-	int* borders;
-	cudaMalloc((void**)&borders, sizeof(int) * BlockNum);
-	
-
-	// Malloc memory for arrays with information about infected, healthy and convalescent agents number (Outputs)
-	int* infected;
-	int* healthy;
-	int* convalescent;
-	int* dead;
-	size_t OutputSize = sizeof(int) * simTime;
-	cudaMalloc((void**)&infected, OutputSize);
-	cudaMalloc((void**)&healthy, OutputSize);
-	cudaMalloc((void**)&convalescent, OutputSize);
-	cudaMalloc((void**)&dead, OutputSize);
-	
-
-	// Allocate agents, places and disease in unified memory
-	Agent* agents;
-	Disease* disease;
-	Place* places;
-	size_t AgentSize = sizeof(Agent) * nAgents;
-	size_t DiseaseSize = sizeof(Disease);
-	size_t PlacesSize = sizeof(Place) * 2 * BlockNum;
-	cudaMalloc((void**)&agents, AgentSize);
-	cudaMalloc((void**)&disease, DiseaseSize);
-	cudaMalloc((void**)&places, PlacesSize);
-	
-	
-	InitAgentss << <BlockNum, BlockSize, sizeof(float) * 5 >> > (agents, states);
-	InitDiseasee << <1, 1 >> > (disease);
-	InitPlacess << <BlockNum, 1 >> > (places, states);
-	
-
-	size_t sharedSize = BlockSize * sizeof(Agent) + sizeof(Disease) + sizeof(Place) * 2 + sizeof(int);
-	auto t3 = std::chrono::steady_clock::now();
-	for (int i = 0; i < simTime; i++)
+	if (GPU_ON)
 	{
-		auto t1 = std::chrono::steady_clock::now();
-		printf("Day %d\\%d: \n", i+1, simTime);
-		for (int dayPart = 0; dayPart < nJourney; dayPart++)
+		// Get device parameters to send data asynchronously and specify number of blocks and threads for each block
+		int device = cudaGetDevice(&device);
+		uint BlockNum = 0;
+		uint BlockSize = 0;
+		GetDeviceParameters(BlockNum, BlockSize);
+		printf("BlockNum, BlockSize: %d, %d\n", BlockNum, BlockSize);
+
+		// Initialize randomness for each thread
+		std::srand(std::time(NULL));
+		curandState* states;
+		cudaMalloc(&states, sizeof(curandState) * nAgents);
+		InitSeeds << <BlockNum, BlockSize>> > (states, std::clock());
+
+
+		//Malloc interior variables
+		int* borders;
+		cudaMalloc((void**)&borders, sizeof(int) * BlockNum);
+	
+
+		// Malloc memory for arrays with information about infected, healthy and convalescent agents number (Outputs)
+		int* infected;
+		int* healthy;
+		int* convalescent;
+		int* dead;
+		size_t OutputSize = sizeof(int) * simTime;
+		cudaMalloc((void**)&infected, OutputSize);
+		cudaMalloc((void**)&healthy, OutputSize);
+		cudaMalloc((void**)&convalescent, OutputSize);
+		cudaMalloc((void**)&dead, OutputSize);
+	
+
+		// Allocate agents, places and disease in unified memory
+		Agent* agents;
+		Disease* disease;
+		Place* places;
+		size_t AgentSize = sizeof(Agent) * nAgents;
+		size_t DiseaseSize = sizeof(Disease);
+		size_t PlacesSize = sizeof(Place) * 2 * BlockNum;
+		cudaMalloc((void**)&agents, AgentSize);
+		cudaMalloc((void**)&disease, DiseaseSize);
+		cudaMalloc((void**)&places, PlacesSize);
+	
+	
+		InitAgentss << <BlockNum, BlockSize, sizeof(float) * 5 >> > (agents, states);
+		InitDiseasee << <1, 1 >> > (disease);
+		InitPlacess << <BlockNum, 1 >> > (places, states);
+	
+
+		size_t sharedSize = BlockSize * sizeof(Agent) + sizeof(Disease) + sizeof(Place) * 2 + sizeof(int);
+		auto t3 = std::chrono::steady_clock::now();
+		for (int i = 0; i < simTime; i++)
 		{
-			DefineBorders << <BlockNum, 1 >> > (borders, BlockSize, states);
+			auto t1 = std::chrono::steady_clock::now();
+			printf("Day %d\\%d: \n", i+1, simTime);
+			for (int dayPart = 0; dayPart < nJourney; dayPart++)
+			{
+				DefineBorders << <BlockNum, 1 >> > (borders, BlockSize, states);
+				cudaDeviceSynchronize();
+				InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize);
+				cudaDeviceSynchronize();
+
+				//TODO bitonicsorter for large number of agents
+				//BitonicSortStep << <BlockNum, BlockSize >> > (agents, states);
+				cudaDeviceSynchronize();
+			}
+			//change states
+			MaskingAgents << <BlockNum, BlockSize >> > (agents, states);
+			VaccinatingAgents << <BlockNum, BlockSize >> > (agents, states);
 			cudaDeviceSynchronize();
-			InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize);
+			testDeath << <BlockNum, BlockSize >> > (agents, states);
+			cudaDeviceSynchronize();
+			diseaseMutuation << <1, 1 >> > (disease, states);
+			cudaDeviceSynchronize();
+			healingAgents << <BlockNum, BlockSize >> > (agents);
 			cudaDeviceSynchronize();
 
-			//TODO bitonicsorter for large number of agents
-			BitonicSortStep << <BlockNum, BlockSize >> > (agents, states);
+			//Get outputs
+			SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthy, BlockSize, i);
 			cudaDeviceSynchronize();
+			SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infected, BlockSize, i);
+			cudaDeviceSynchronize();
+			SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescent, BlockSize, i);
+			cudaDeviceSynchronize();
+			SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, dead, BlockSize, i);
+			cudaDeviceSynchronize();
+
+			auto t2 = std::chrono::steady_clock::now();
+			std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
+			printf("\n");
 		}
-		//change states
-		MaskingAgents << <BlockNum, BlockSize >> > (agents, states);
-		VaccinatingAgents << <BlockNum, BlockSize >> > (agents, states);
 		cudaDeviceSynchronize();
-		testDeath << <BlockNum, BlockSize >> > (agents, states);
-		cudaDeviceSynchronize();
-		diseaseMutuation << <1, 1 >> > (disease, states);
-		cudaDeviceSynchronize();
-		healingAgents << <BlockNum, BlockSize >> > (agents);
-		cudaDeviceSynchronize();
+		auto t4 = std::chrono::steady_clock::now();
 
-		//Get outputs
-		SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthy, BlockSize, i);
-		cudaDeviceSynchronize();
-		SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infected, BlockSize, i);
-		cudaDeviceSynchronize();
-		SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescent, BlockSize, i);
-		cudaDeviceSynchronize();
-		SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, dead, BlockSize, i);
-		cudaDeviceSynchronize();
+		int* infectedHost = new int[simTime];
+		int* healthyHost = new int[simTime];
+		int* convalescentHost = new int[simTime];
+		int* deadHost = new int[simTime];
 
-		auto t2 = std::chrono::steady_clock::now();
-		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
-		printf("\n");
+		cudaMemcpy(healthyHost, healthy, OutputSize, cudaMemcpyDeviceToHost);
+		cudaMemcpy(infectedHost, infected, OutputSize, cudaMemcpyDeviceToHost);
+		cudaMemcpy(convalescentHost, convalescent, OutputSize, cudaMemcpyDeviceToHost);
+		cudaMemcpy(deadHost, dead, OutputSize, cudaMemcpyDeviceToHost);
+
+		PrintOutputs(healthyHost, infectedHost, convalescentHost, deadHost);
+	
+	
+	
+		cudaFree(agents); cudaFree(disease); cudaFree(infected); cudaFree(healthy); cudaFree(convalescent); cudaFree(dead); cudaFree(states); cudaFree(places);
+		delete[] infectedHost;
+		delete[] healthyHost;
+		delete[] convalescentHost;
+		delete[] deadHost;
 	}
-	cudaDeviceSynchronize();
-	auto t4 = std::chrono::steady_clock::now();
+	else
+	{
+		int* infected = new int[simTime];
+		int* healthy = new int[simTime];
+		int* convalescent = new int[simTime];
+		int* dead = new int[simTime];
 
-	int* infectedHost = new int[simTime];
-	int* healthyHost = new int[simTime];
-	int* convalescentHost = new int[simTime];
-	int* deadHost = new int[simTime];
+		SimulationCPU(healthy, infected, convalescent, dead);
 
-	cudaMemcpy(healthyHost, healthy, OutputSize, cudaMemcpyDeviceToHost);
-	cudaMemcpy(infectedHost, infected, OutputSize, cudaMemcpyDeviceToHost);
-	cudaMemcpy(convalescentHost, convalescent, OutputSize, cudaMemcpyDeviceToHost);
-	cudaMemcpy(deadHost, dead, OutputSize, cudaMemcpyDeviceToHost);
+		for (int i = 0; i < simTime; i++)
+		{
+			printf("H: %d, I: %d, C: %d, D: %d\n", healthy[i], infected[i], convalescent[i], dead[i]);
+		}
 
-	PrintOutputs(healthyHost, infectedHost, convalescentHost, deadHost);
-	
-	
-	
-	cudaFree(agents); cudaFree(disease); cudaFree(infected); cudaFree(healthy); cudaFree(convalescent); cudaFree(dead); cudaFree(states); cudaFree(places);
-	delete[] infectedHost;
-	delete[] healthyHost;
-	delete[] convalescentHost;
-	delete[] deadHost;
+		delete[] infected;
+		delete[] healthy;
+		delete[] convalescent;
+		delete[] dead;
+	}
+
+
 	return 0;
 }

@@ -1,9 +1,10 @@
 // Simulation parameters ------------------------------------------
-#define nAgents 1000        //27,3kB for each 1k agents
-#define simTime 1*365		  //4,4kB for each year (simTime = 365 is one year simulation)
-#define vaccinTime 365       //time of protection caused vaccination
-#define nJourney 3          //number of journeys each day for each agent
-#define nInfectedAgents 0.01 //defines infected agents procent at the start [%]
+#define nAgents 1000            //27,3kB for each 1k agents
+#define simTime 1*120		     //4,4kB for each year (simTime = 365 is one year simulation)
+#define vaccinTime 365          //time of protection caused vaccination
+#define nJourney 3             //number of journeys each day for each agent
+#define nInfectedAgents 0.01  //defines infected agents procent at the start [%]
+#define maskEffectivness 0.5 //0 means 100% defense, 1 means 0% defense
 
 // Agents boundaries ----------------------------------------------
 #define maxDeathProb 0.01             // max probability for death when beeing infected
@@ -20,3 +21,4 @@
 
 // Places parameters -----------------------------------------------
 #define maxExtavertizm 0.1
+#define nPlacesCPU 50

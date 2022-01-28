@@ -4,6 +4,7 @@
     <ClCompile Include="randomf.cpp">
       <Filter>Utilities</Filter>
     </ClCompile>
+    <ClCompile Include="CPU.cpp" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Classes">
@@ -30,6 +31,9 @@
       <Filter>Classes</Filter>
     </ClInclude>
     <ClInclude Include="parallel.cuh">
+      <Filter>Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="CPU.h">
       <Filter>Utilities</Filter>
     </ClInclude>
   </ItemGroup>

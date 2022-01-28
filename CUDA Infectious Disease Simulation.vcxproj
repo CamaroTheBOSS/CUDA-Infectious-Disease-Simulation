@@ -47,6 +47,7 @@
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
       <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <OpenMPSupport>true</OpenMPSupport>
     </ClCompile>
     <Link>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -77,10 +78,12 @@
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="CPU.cpp" />
     <ClCompile Include="randomf.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Agent.cuh" />
+    <ClInclude Include="CPU.h" />
     <ClInclude Include="Disease.cuh" />
     <ClInclude Include="parallel.cuh" />
     <ClInclude Include="parameters.h" />
