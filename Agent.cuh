@@ -14,4 +14,5 @@ struct Agent
 	unsigned __int16 vacRessist = 0;    // infection ressistance caused vaccination (for given number of days)
 	unsigned __int8 state = 0;         // 0 = healthy ; 1 = infected ;  2 = convalescent; 3 = dead
 	unsigned __int8 sickDaysLeft = 0; // how many days to infection's end
+	unsigned __int8 randN = 0;
 };
