@@ -203,11 +203,12 @@ void InfectionTest(Agent* agents, Disease disease, Place* places)
 	}
 }
 
-void InitAgents(Agent* agents)
+int InitAgents(Agent* agents)
 {
 	int i;
 	int size = nAgents;
-#pragma omp parallel for shared(size, agents), private(i)
+	float x;
+#pragma omp parallel for shared(size, agents), private(i, x)
 	for (i = 0; i < size; i++)
 	{
 		agents[i].deathProb = floatRand(0, maxDeathProb);
@@ -215,9 +216,11 @@ void InitAgents(Agent* agents)
 		agents[i].ressistance = floatRand(0, maxRessistanceParameter);
 		agents[i].swapMaskProb = floatRand(0, maxSwapMaskProb);
 		agents[i].vaccinWill = floatRand(0, maxVaccinProb);
-		if (floatRand(0, 1) < nInfectedAgents)
+		x = floatRand(0, 1);
+		if (x < nInfectedAgents)
 		{
 			agents[i].state = 1;
+			agents[i].sickDaysLeft = Dduration;		
 		}
 	}
 }
@@ -229,7 +232,25 @@ void InitPlaces(Place* places)
 #pragma omp parallel for shared(size, places), private(i)
 	for (i = 0; i < size; i++)
 	{
+		std::srand(omp_get_thread_num() * 1000 + std::time(NULL));
 		places[i].contactFactor = floatRand(0, maxExtavertizm);
+	}
+}
+
+void InitSeeds(unsigned int* seeds) 
+{
+	int my_thread_id;
+	unsigned int seed;
+#pragma omp parallel private (seed, my_thread_id)
+	{
+		my_thread_id = omp_get_thread_num();
+
+		//create seed on thread using current time
+		unsigned int seed = (unsigned)time(NULL);
+
+		//munge the seed using our thread number so that each thread has its
+		//own unique seed, therefore ensuring it will generate a different set of numbers
+		seeds[my_thread_id] = (seed & 0xFFFFFFF0) | (my_thread_id + 1);
 	}
 }
 
@@ -238,18 +259,20 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead)
 	Agent* agents = new Agent[nAgents];
 	Disease disease;
 	Place* places = new Place[nPlacesCPU];
-	std::srand(std::time(NULL));
+	int maxThreads = omp_get_max_threads();
+	unsigned int* seeds = new unsigned int[maxThreads];
 
 	disease.duration = Dduration;
 	disease.contagiousness = Dcontagiousness;
+	InitSeeds(seeds);
 	InitAgents(agents);
 	InitPlaces(places);
-	
-	
-	for (int i = 0; i < simTime; i++)
+	SumOutputs(agents, healthy, infected, convalescent, dead, 0);
+
+	for (int i = 1; i <= simTime; i++)
 	{
 		auto t1 = std::chrono::steady_clock::now();
-		printf("Day %d\\%d: \n", i + 1, simTime);
+		printf("Day %d\\%d: \n", i, simTime);
 		for (int dayPart = 0; dayPart < nJourney; dayPart++)
 		{
 			InfectionTest(agents, disease, places);
@@ -266,4 +289,5 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead)
 	
 	delete[] agents;
 	delete[] places;
+	delete[] seeds;
 }
