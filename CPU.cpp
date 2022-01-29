@@ -4,7 +4,7 @@
 #include <time.h>
 #include <omp.h>
 #include <chrono>
-#include <vector>
+#include <set>
 #include <algorithm>
 #include <iterator>
 
@@ -30,7 +30,7 @@ void SumOutputs(Agent* agents, int* healthy, int* infected, int* convalescent, i
 #pragma omp critical
 			{
 				healthy[day] += 1;
-			}	
+			}
 		}
 		else if (agents[i].state == 1)
 		{
@@ -76,7 +76,7 @@ void updateAgents(Agent* agents, SimulationParameters* sim)
 	}
 }
 
-void DiseaseMutuation(Disease &disease, SimulationParameters* sim)
+void DiseaseMutuation(Disease& disease, SimulationParameters* sim)
 {
 	float x = floatRand(0, 1);
 	if (x < sim[0].mutuationProbx)
@@ -103,7 +103,7 @@ void TestDeath(Agent* agents, SimulationParameters* sim)
 				//printf("Im dead :(\n");
 			}
 		}
-	}	
+	}
 }
 
 void MaskingVaccinAgents(Agent* agents, SimulationParameters* sim)
@@ -161,7 +161,7 @@ void InfectionTest(Agent* agents, Disease disease, Place* places, SimulationPara
 		firstIdx = placeCap * floor((float)i / (float)placeCap);
 		lastIdx = firstIdx + placeCap;
 		placeIdx = floor((float)i / (float)placeCap);
-		
+
 		nInfected = 0;
 
 		infectionComponent = 0;
@@ -175,7 +175,7 @@ void InfectionTest(Agent* agents, Disease disease, Place* places, SimulationPara
 			{
 				nInfected++;
 				infectionComponent += agents[j].infectProb;
-				
+
 				if (agents[j].masked)
 				{
 					infectionComponent -= agents[j].infectProb * sim[0].maskEffectivnessx;
@@ -240,7 +240,7 @@ void InitPlaces(Place* places, SimulationParameters* sim)
 	}
 }
 
-void InitSeeds(unsigned int* seeds) 
+void InitSeeds(unsigned int* seeds)
 {
 	int my_thread_id;
 	unsigned int seed;
@@ -257,6 +257,91 @@ void InitSeeds(unsigned int* seeds)
 	}
 }
 
+void Swap(Agent* agent1, Agent* agent2)
+{
+	Agent temp = *agent1;
+	*agent1 = *agent2;
+	*agent2 = temp;
+}
+
+int DivideArray(Agent* agents, int minIdx, int maxIdx)
+{
+	Agent pivot = agents[maxIdx];
+	int i = minIdx - 1;
+
+	for (int j = minIdx; j < maxIdx; j++)
+	{
+		if (agents[j].randN < pivot.randN)
+		{
+			i++;
+			Swap(&agents[i], &agents[j]);
+		}
+	}
+	Swap(&agents[i + 1], &agents[maxIdx]);
+	return (i + 1);
+}
+
+void QuickSortShuffler(Agent* agents, int minIdx, int maxIdx)
+{
+	int i;
+#pragma omp parallel for shared(agents, maxIdx), private(i)
+	for (i = 0; i < maxIdx; i++)
+	{
+		agents[i].randN = floatRand(0, 1);
+	}
+
+	int next;
+	if (minIdx < maxIdx)
+	{
+		next = DivideArray(agents, minIdx, maxIdx);
+		QuickSortShuffler(agents, minIdx, next - 1);
+		QuickSortShuffler(agents, next + 1, maxIdx);
+	}
+}
+
+template<typename S>
+auto SelectRandomFromSet(const S& s, size_t n) 
+{
+	auto it = std::begin(s);
+	// 'advance' the iterator n times
+	std::advance(it, n);
+	return it;
+}
+
+std::set<int> SetCpy(std::set<int> s)
+{
+	std::set<int> scpy;
+	std::copy(s.begin(), s.end(), std::inserter(scpy, scpy.begin()));
+
+	return scpy;
+}
+
+std::set<int> DefineSetOfInts(int maxInt)
+{
+	std::set<int> s;
+	for (int i = 0; i < maxInt; i++)
+	{
+		s.insert(i);
+	}
+
+	return s;
+}
+
+void ShuffleWithSet(Agent* agents, std::set<int> s, SimulationParameters* sim)
+{
+	std::set<int> sCpy = SetCpy(s);
+
+	for (int i = 0; i < sim[0].nAgentsx; i++)
+	{
+		auto r = rand() % s.size();
+		auto n = *SelectRandomFromSet(s, r);
+
+		Swap(&agents[i], &agents[n]);
+
+		sCpy.erase(n);
+	}
+}
+
 void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, SimulationParameters* sim)
 {
 	Agent* agents = new Agent[sim[0].nAgentsx];
@@ -268,10 +353,12 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 
 	disease.duration = sim[0].durationx;
 	disease.contagiousness = sim[0].contagiousnesx;
+	std::set<int> set = DefineSetOfInts(sim[0].nAgentsx);
 	InitSeeds(seeds);
 	InitAgents(agents, sim);
 	InitPlaces(places, sim);
 	SumOutputs(agents, healthy, infected, convalescent, dead, 0, sim);
+
 
 	for (int i = 1; i <= sim[0].simTimex; i++)
 	{
@@ -280,6 +367,8 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 		for (int dayPart = 0; dayPart < nJourney; dayPart++)
 		{
 			InfectionTest(agents, disease, places, sim);
+			//QuickSortShuffler(agents, 0, sim[0].nAgentsx);
+			ShuffleWithSet(agents, set, sim);
 		}
 		MaskingVaccinAgents(agents, sim);
 		TestDeath(agents, sim);
@@ -290,7 +379,7 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 		auto t2 = std::chrono::steady_clock::now();
 		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
 	}
-	
+
 	delete[] agents;
 	delete[] places;
 	delete[] seeds;

@@ -137,6 +137,7 @@ __global__ void BitonicShuffler(Agent* agents, curandState* states, SimulationPa
 {
 	int i, ixj;
 	i = threadIdx.x + blockDim.x * blockIdx.x;
+
 	if (i < sim[0].nAgentsx)
 	{
 		for (int k = 2; k <= sim[0].nAgentsx; k <<= 1)
@@ -527,7 +528,7 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	}
 	cudaDeviceSynchronize();
 	auto t4 = std::chrono::steady_clock::now();
-
+	
 	cudaMemcpy(healthy, healthyDev, OutputSize, cudaMemcpyDeviceToHost);
 	cudaMemcpy(infected, infectedDev, OutputSize, cudaMemcpyDeviceToHost);
 	cudaMemcpy(convalescent, convalescentDev, OutputSize, cudaMemcpyDeviceToHost);
@@ -539,7 +540,7 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 __host__ void SetSimParameters(SimulationParameters &sim)
 {
 	// Simulation parameters ------------------------------------------
-	sim.nAgentsx = pow(2, 11);
+	sim.nAgentsx = pow(2, 18);
 	sim.simTimex = 365;
 	sim.vaccinTimex = 365;
 	sim.nJourneyx = 3;
@@ -566,7 +567,7 @@ __host__ void SetSimParameters(SimulationParameters &sim)
 
 int main()
 {
-	bool GPU_ON = false; //if true, simulation will be turned on on the GPU
+	bool GPU_ON = true; //if true, simulation will be turned on on the GPU
 	SimulationParameters* SIM = new SimulationParameters;
 	SetSimParameters(SIM[0]);
 
