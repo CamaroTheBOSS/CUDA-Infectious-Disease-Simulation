@@ -15,9 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="parameters.h">
-      <Filter>Utilities</Filter>
-    </ClInclude>
     <ClInclude Include="randomf.h">
       <Filter>Utilities</Filter>
     </ClInclude>
@@ -35,6 +32,9 @@
     </ClInclude>
     <ClInclude Include="CPU.h">
       <Filter>Utilities</Filter>
+    </ClInclude>
+    <ClInclude Include="SimulationParameters.cuh">
+      <Filter>Classes</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

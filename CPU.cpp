@@ -4,17 +4,20 @@
 #include <time.h>
 #include <omp.h>
 #include <chrono>
+#include <vector>
+#include <algorithm>
+#include <iterator>
 
 #include "Place.cuh"
 #include "Disease.cuh"
 #include "Agent.cuh"
-#include "parameters.h"
 #include "randomf.h"
+#include "SimulationParameters.cuh"
 
-void SumOutputs(Agent* agents, int* healthy, int* infected, int* convalescent, int* dead, int day)
+void SumOutputs(Agent* agents, int* healthy, int* infected, int* convalescent, int* dead, int day, SimulationParameters* sim)
 {
 	int i;
-	int size = nAgents;
+	int size = sim[0].nAgentsx;
 	healthy[day] = 0;
 	infected[day] = 0;
 	convalescent[day] = 0;
@@ -53,10 +56,10 @@ void SumOutputs(Agent* agents, int* healthy, int* infected, int* convalescent, i
 	}
 }
 
-void UpdateAgents(Agent* agents)
+void updateAgents(Agent* agents, SimulationParameters* sim)
 {
 	int i;
-	int size = nAgents;
+	int size = sim[0].nAgentsx;
 #pragma omp parallel for shared(size, agents), private(i)
 	for (i = 0; i < size; i++)
 	{
@@ -73,20 +76,20 @@ void UpdateAgents(Agent* agents)
 	}
 }
 
-void DiseaseMutuation(Disease &disease)
+void DiseaseMutuation(Disease &disease, SimulationParameters* sim)
 {
 	float x = floatRand(0, 1);
-	if (x < mutuationProb)
+	if (x < sim[0].mutuationProbx)
 	{
-		x = floatRand(-mutuationIntensity, mutuationIntensity);
+		x = floatRand(-sim[0].mutuationIntensityx, sim[0].mutuationIntensityx);
 		disease.contagiousness += x * disease.contagiousness;
 	}
 }
 
-void TestDeath(Agent* agents)
+void TestDeath(Agent* agents, SimulationParameters* sim)
 {
 	int i;
-	int size = nAgents;
+	int size = sim[0].nAgentsx;
 	float x;
 #pragma omp parallel for shared(size, agents), private(i, x)
 	for (i = 0; i < size; i++)
@@ -103,12 +106,12 @@ void TestDeath(Agent* agents)
 	}	
 }
 
-void MaskingVaccinAgents(Agent* agents)
+void MaskingVaccinAgents(Agent* agents, SimulationParameters* sim)
 {
-	int size = nAgents;
+	int size = sim[0].nAgentsx;
 	int i;
 	float x;
-#pragma omp parallel for shared(size, agents), private(i, x)
+#pragma omp parallel for shared(size, agents, sim), private(i, x)
 	for (i = 0; i < size; i++)
 	{
 		x = floatRand(0, 1);
@@ -123,17 +126,17 @@ void MaskingVaccinAgents(Agent* agents)
 		x = floatRand(0, 1);
 		if ((x < agents[i].vaccinWill) && (agents[i].vacRessist == 0))
 		{
-			agents[i].vacRessist == vaccinTime;
+			agents[i].vacRessist == sim[0].vaccinTimex;
 		}
 	}
 }
 
-float TestAgent(Agent agent, float infProb)
+float TestAgent(Agent agent, float infProb, SimulationParameters* sim)
 {
 	float x = floatRand(0, 1);
 
 	float ressistanceComponent = agent.ressistance * infProb;
-	float vacRessist = infProb * agent.vacRessist / vaccinTime;
+	float vacRessist = infProb * agent.vacRessist / sim[0].vaccinTimex;
 	infProb -= ressistanceComponent + vacRessist;
 	if (x > infProb)
 	{
@@ -142,17 +145,17 @@ float TestAgent(Agent agent, float infProb)
 	return 1;
 }
 
-void InfectionTest(Agent* agents, Disease disease, Place* places)
+void InfectionTest(Agent* agents, Disease disease, Place* places, SimulationParameters* sim)
 {
 	int i, j;
-	int size = nAgents;
-	int placeCap = nAgents / nPlacesCPU;
+	int size = sim[0].nAgentsx;
+	int placeCap = sim[0].nAgentsx / sim[0].nPlacesCPUx;
 
 	int firstIdx, lastIdx, placeIdx, nInfected;
 	float infectionComponent, nAgentsComponent, diseaseComponent, placeComponent, infectionprob;
 
 
-#pragma omp parallel for shared(size, placeCap, agents, places, disease), private(i, j, firstIdx, lastIdx, placeIdx, nInfected, infectionComponent, nAgentsComponent, diseaseComponent, infectionprob)
+#pragma omp parallel for shared(size, placeCap, agents, places, disease, sim), private(i, j, firstIdx, lastIdx, placeIdx, nInfected, infectionComponent, nAgentsComponent, diseaseComponent, infectionprob)
 	for (i = 0; i < size; i++)
 	{
 		firstIdx = placeCap * floor((float)i / (float)placeCap);
@@ -175,7 +178,7 @@ void InfectionTest(Agent* agents, Disease disease, Place* places)
 				
 				if (agents[j].masked)
 				{
-					infectionComponent -= agents[j].infectProb * maskEffectivness;
+					infectionComponent -= agents[j].infectProb * sim[0].maskEffectivnessx;
 				}
 			}
 		}
@@ -193,47 +196,47 @@ void InfectionTest(Agent* agents, Disease disease, Place* places)
 
 		if (agents[i].state == 0)
 		{
-			if (TestAgent(agents[i], infectionprob))
+			if (TestAgent(agents[i], infectionprob, sim))
 			{
 				agents[i].state = 1;
-				agents[i].sickDaysLeft = Dduration;
+				agents[i].sickDaysLeft = sim[0].durationx;
 				//printf("Im sick :(\n");
 			}
 		}
 	}
 }
 
-int InitAgents(Agent* agents)
+int InitAgents(Agent* agents, SimulationParameters* sim)
 {
 	int i;
-	int size = nAgents;
+	int size = sim[0].nAgentsx;
 	float x;
-#pragma omp parallel for shared(size, agents), private(i, x)
+#pragma omp parallel for shared(size, agents, sim), private(i, x)
 	for (i = 0; i < size; i++)
 	{
-		agents[i].deathProb = floatRand(0, maxDeathProb);
-		agents[i].infectProb = floatRand(0, maxInfectProb);
-		agents[i].ressistance = floatRand(0, maxRessistanceParameter);
-		agents[i].swapMaskProb = floatRand(0, maxSwapMaskProb);
-		agents[i].vaccinWill = floatRand(0, maxVaccinProb);
+		agents[i].deathProb = floatRand(0, sim[0].maxDeathProbbx);
+		agents[i].infectProb = floatRand(0, sim[0].maxInfectProbx);
+		agents[i].ressistance = floatRand(0, sim[0].maxAgentRessistancex);
+		agents[i].swapMaskProb = floatRand(0, sim[0].maxMaskSwapProbx);
+		agents[i].vaccinWill = floatRand(0, sim[0].maxVaccinationProbx);
 		x = floatRand(0, 1);
-		if (x < nInfectedAgents)
+		if (x < sim[0].nInfectedAgentsProcentx)
 		{
 			agents[i].state = 1;
-			agents[i].sickDaysLeft = Dduration;		
+			agents[i].sickDaysLeft = sim[0].durationx;
 		}
 	}
 }
 
-void InitPlaces(Place* places)
+void InitPlaces(Place* places, SimulationParameters* sim)
 {
 	int i;
-	int size = nPlacesCPU;
-#pragma omp parallel for shared(size, places), private(i)
+	int size = sim[0].nPlacesCPUx;
+#pragma omp parallel for shared(size, places, sim), private(i)
 	for (i = 0; i < size; i++)
 	{
 		std::srand(omp_get_thread_num() * 1000 + std::time(NULL));
-		places[i].contactFactor = floatRand(0, maxExtavertizm);
+		places[i].contactFactor = floatRand(0, sim[0].maxContactFactorx);
 	}
 }
 
@@ -254,35 +257,36 @@ void InitSeeds(unsigned int* seeds)
 	}
 }
 
-void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead)
+void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, SimulationParameters* sim)
 {
-	Agent* agents = new Agent[nAgents];
+	Agent* agents = new Agent[sim[0].nAgentsx];
 	Disease disease;
-	Place* places = new Place[nPlacesCPU];
+	Place* places = new Place[sim[0].nPlacesCPUx];
 	int maxThreads = omp_get_max_threads();
 	unsigned int* seeds = new unsigned int[maxThreads];
 
-	disease.duration = Dduration;
-	disease.contagiousness = Dcontagiousness;
-	InitSeeds(seeds);
-	InitAgents(agents);
-	InitPlaces(places);
-	SumOutputs(agents, healthy, infected, convalescent, dead, 0);
 
-	for (int i = 1; i <= simTime; i++)
+	disease.duration = sim[0].durationx;
+	disease.contagiousness = sim[0].contagiousnesx;
+	InitSeeds(seeds);
+	InitAgents(agents, sim);
+	InitPlaces(places, sim);
+	SumOutputs(agents, healthy, infected, convalescent, dead, 0, sim);
+
+	for (int i = 1; i <= sim[0].simTimex; i++)
 	{
 		auto t1 = std::chrono::steady_clock::now();
-		printf("Day %d\\%d: \n", i, simTime);
+		printf("Day %d\\%d: \n", i, sim[0].simTimex);
 		for (int dayPart = 0; dayPart < nJourney; dayPart++)
 		{
-			InfectionTest(agents, disease, places);
+			InfectionTest(agents, disease, places, sim);
 		}
-		MaskingVaccinAgents(agents);
-		TestDeath(agents);
-		DiseaseMutuation(disease);
-		UpdateAgents(agents);
+		MaskingVaccinAgents(agents, sim);
+		TestDeath(agents, sim);
+		DiseaseMutuation(disease, sim);
+		updateAgents(agents, sim);
 
-		SumOutputs(agents, healthy, infected, convalescent, dead, i);
+		SumOutputs(agents, healthy, infected, convalescent, dead, i, sim);
 		auto t2 = std::chrono::steady_clock::now();
 		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
 	}

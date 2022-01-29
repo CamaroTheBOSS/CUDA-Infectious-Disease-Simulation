@@ -15,7 +15,7 @@
 #include "Place.cuh"
 #include "Disease.cuh"
 #include "Agent.cuh"
-#include "parameters.h"
 #include "randomf.h"
+#include "SimulationParameters.cuh"
 
 typedef unsigned int uint;

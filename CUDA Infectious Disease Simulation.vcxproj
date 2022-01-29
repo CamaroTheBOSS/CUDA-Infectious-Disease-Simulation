@@ -86,9 +86,9 @@
     <ClInclude Include="CPU.h" />
     <ClInclude Include="Disease.cuh" />
     <ClInclude Include="parallel.cuh" />
-    <ClInclude Include="parameters.h" />
     <ClInclude Include="Place.cuh" />
     <ClInclude Include="randomf.h" />
+    <ClInclude Include="SimulationParameters.cuh" />
   </ItemGroup>
   <ItemGroup>
     <CudaCompile Include="parallel.cu" />
