@@ -342,6 +342,52 @@ void ShuffleWithSet(Agent* agents, std::set<int> s, SimulationParameters* sim)
 	}
 }
 
+void PrintSlide(int k, int step)
+{
+	int i;
+#pragma omp parallel for shared(k), private(i)
+	for (i = 0; i <= k; i++)
+	{
+		printf("%c", 219);
+	}
+#pragma omp parallel for shared(step, k) private(i)
+	for (i = 0; i < step - k; i++)
+	{
+		printf(" ");
+	}
+}
+
+void PrintSliders(int* healthy, int* infected, int* convalescent, int* dead, int day, SimulationParameters* sim)
+{
+	int step = 30;
+	int h = ceil(healthy[day] * step / sim[0].nAgentsx);
+	int i = ceil(infected[day] * step / sim[0].nAgentsx);
+	int c = ceil(convalescent[day] * step / sim[0].nAgentsx);
+	int d = ceil(dead[day] * step / sim[0].nAgentsx);
+
+	printf(" Healthy:       |                  ");
+	gotoxy(18, 3);
+	PrintSlide(h, step);
+	printf("|\n");
+
+	printf(" Infected:      |                  ");
+	gotoxy(18, 4);
+	PrintSlide(i, step);
+	printf("|\n");
+
+	printf(" Convalescent:  |                  ");
+	gotoxy(18, 5);
+	PrintSlide(c, step);
+	printf("|\n");
+
+	printf(" Dead:          |                  ");
+	gotoxy(18, 6);
+	PrintSlide(d, step);
+	printf("|\n");
+
+	gotoxy(1, 1);
+}
+
 void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, SimulationParameters* sim)
 {
 	Agent* agents = new Agent[sim[0].nAgentsx];
@@ -363,7 +409,7 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 	for (int i = 1; i <= sim[0].simTimex; i++)
 	{
 		auto t1 = std::chrono::steady_clock::now();
-		printf("Day %d\\%d: \n", i, sim[0].simTimex);
+		printf(" Day %d\\%d: \n", i, sim[0].simTimex);
 		for (int dayPart = 0; dayPart < nJourney; dayPart++)
 		{
 			InfectionTest(agents, disease, places, sim);
@@ -377,7 +423,8 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 
 		SumOutputs(agents, healthy, infected, convalescent, dead, i, sim);
 		auto t2 = std::chrono::steady_clock::now();
-		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
+		std::cout << " One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
+		PrintSliders(healthy, infected, convalescent, dead, i, sim);
 	}
 
 	delete[] agents;

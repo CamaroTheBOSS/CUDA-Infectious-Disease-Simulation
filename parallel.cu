@@ -428,7 +428,7 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	size_t simSize = sizeof(SimulationParameters);
 	cudaMalloc((void**)&simDev, simSize);
 	cudaMemcpy(simDev, sim, simSize, cudaMemcpyHostToDevice);
-
+	
 	// Get device parameters to send data asynchronously and specify number of blocks and threads for each block
 	int device = cudaGetDevice(&device);
 	uint BlockNum = 0;
@@ -540,13 +540,13 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 __host__ void SetSimParameters(SimulationParameters &sim)
 {
 	// Simulation parameters ------------------------------------------
-	sim.nAgentsx = pow(2, 18);
+	sim.nAgentsx = pow(2, 11);
 	sim.simTimex = 365;
 	sim.vaccinTimex = 365;
 	sim.nJourneyx = 3;
 	sim.nInfectedAgentsProcentx = 0.01;
 	sim.maskEffectivnessx = 0.5;
-
+	
 	// Agents boundaries ----------------------------------------------
 	sim.maxDeathProbbx = 0.01;
 	sim.maxInfectProbx = 0.05;
@@ -567,7 +567,7 @@ __host__ void SetSimParameters(SimulationParameters &sim)
 
 int main()
 {
-	bool GPU_ON = true; //if true, simulation will be turned on on the GPU
+	bool GPU_ON = false; //if true, simulation will be turned on on the GPU
 	SimulationParameters* SIM = new SimulationParameters;
 	SetSimParameters(SIM[0]);
 
@@ -585,6 +585,7 @@ int main()
 		SimulationCPU(healthy, infected, convalescent, dead, SIM);
 	}
 
+	clear();
 	PrintOutputs(healthy, infected, convalescent, dead, SIM);
 
 	delete[] infected;
