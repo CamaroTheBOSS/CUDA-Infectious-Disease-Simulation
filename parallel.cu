@@ -1,6 +1,7 @@
 #include "parallel.cuh"
 #include "CPU.h"
 #include <chrono>
+#include <string>
 
 __device__ void SwapDevice(Agent* agent1, Agent* agent2)
 {
@@ -132,7 +133,7 @@ __global__ void InfectionTest(Agent* agents, Disease* disease, Place* places, cu
 	
 }
 
-__global__ void BitonicSortStep(Agent* agents, curandState* states) //Sorting random numbers
+__global__ void BitonicShuffler(Agent* agents, curandState* states) //Sorting random numbers
 {
 	int i, ixj;
 	i = threadIdx.x + blockDim.x * blockIdx.x;
@@ -478,7 +479,7 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, deadDev, BlockSize, 0);
 	cudaDeviceSynchronize();
 
-
+	
 	size_t sharedSize = BlockSize * sizeof(Agent) + sizeof(Disease) + sizeof(Place) * 2 + sizeof(int);
 	auto t3 = std::chrono::steady_clock::now();
 	for (int i = 1; i < simTime + 1; i++)
@@ -492,9 +493,9 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 			InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize);
 			cudaDeviceSynchronize();
 
-			//TODO bitonicsorter for large number of agents
-			//BitonicSortStep << <BlockNum, BlockSize >> > (agents, states);
+			BitonicShuffler << <BlockNum, BlockSize >> > (agents, states);
 			cudaDeviceSynchronize();
+			std::cout << cudaGetErrorString << "\n";
 		}
 		//change states
 		MaskingAgents << <BlockNum, BlockSize >> > (agents, states);
