@@ -7,6 +7,7 @@ struct SimulationParameters
 	unsigned __int8 nJourneyx = 3;
 	float nInfectedAgentsProcentx = 0.01;
 	float maskEffectivnessx = 0.5;
+	int nGroupsx = 4;
 
 	// Agents boundaries ----------------------------------------------
 	float maxDeathProbbx = 0.01;
@@ -20,6 +21,8 @@ struct SimulationParameters
 	float mutuationIntensityx = 0.1;
 	float contagiousnesx = 0.05;
 	int durationx = 14;
+	int mutuationTime = 10; //number of days when convalescent agents can change state for healthy
+	float convalescentToHealthyProb = 0.2;
 
 	// Places parameters -----------------------------------------------
 	float maxContactFactorx = 0.1;

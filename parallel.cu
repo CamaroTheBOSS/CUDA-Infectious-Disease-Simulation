@@ -1,7 +1,22 @@
 #include "parallel.cuh"
 #include "CPU.h"
 #include <chrono>
+#include <iomanip>
+#include <fstream>
 #include <string>
+
+__device__ void PrintSlideDev(int k, int step)
+{
+	int i;
+	for (i = 0; i <= k; i++)
+	{
+		printf("%c", 219);
+	}
+	for (i = 0; i < step - k; i++)
+	{
+		printf(" ");
+	}
+}
 
 __device__ void SwapDevice(Agent* agent1, Agent* agent2)
 {
@@ -18,7 +33,7 @@ __device__ bool testAgent(Agent agent, float infProb, curandState state, Simulat
 	float ressistanceComponent = agent.ressistance * infProb;
 	float vacRessist = infProb * agent.vacRessist / sim[0].vaccinTimex;
 
-	infProb -= ressistanceComponent + vacRessist;
+	infProb += ressistanceComponent + vacRessist;
 	//printf("%f\n", infProb);
 	if (x > infProb)
 	{
@@ -125,7 +140,7 @@ __global__ void InfectionTest(Agent* agents, Disease* disease, Place* places, cu
 			if (testAgent(agents[i], infProb, states[i], sim))
 			{
 				agents[i].state = 1;
-				agents[i].sickDaysLeft = sim[0].durationx;
+				agents[i].sickDaysLeft = sim[0].durationx - (int)((agents[i].ressistance - 0.5) * 100);
 				//printf("Im sick :(\n");
 			}			
 		}
@@ -171,6 +186,44 @@ __global__ void BitonicShuffler(Agent* agents, curandState* states, SimulationPa
 	}
 }
 
+__global__ void BitonicShufflerForIndividualGroups(Agent* agents, curandState* states, SimulationParameters* sim, int groupNb) //Sorting random numbers
+{
+	int i, ixj;
+	i = threadIdx.x + blockDim.x * blockIdx.x;
+
+	if (i < sim[0].nAgentsx)
+	{
+		for (int k = groupNb * sim[0].nAgentsx / sim[0].nGroupsx + 2; k <= (groupNb + 1) * sim[0].nAgentsx / sim[0].nGroupsx + 2; k <<= 1)
+		{
+			for (int j = k >> 1; j > 0; j = j >> 1)
+			{
+				ixj = i ^ j;
+				agents[i].randN = curand_uniform(&states[i]);
+				__syncthreads();
+
+				if ((ixj) > i)
+				{
+					if ((i & k) == 0)
+					{
+						if (agents[i].randN > agents[ixj].randN)
+						{
+							SwapDevice(&agents[i], &agents[ixj]);
+						}
+					}
+					else if ((i & k) != 0)
+					{
+						if (agents[i].randN < agents[ixj].randN)
+						{
+							SwapDevice(&agents[i], &agents[ixj]);
+						}
+					}
+				}
+				__syncthreads();
+			}
+		}
+	}
+}
+
 __global__ void DefineBorders(int* borders, int BlockSize, curandState* states)
 {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -185,10 +238,10 @@ __global__ void MaskingAgents(Agent* agents, curandState* states, SimulationPara
 		float x = curand_uniform(&states[i]);
 		if (x < agents[i].swapMaskProb)
 		{
-			if (agents[i].masked)
-				agents[i].masked = false;
-			else
-				agents[i].masked = true;
+			//if (agents[i].masked)
+				//agents[i].masked = false;
+			//else
+			agents[i].masked = true;
 		}
 	}
 }
@@ -212,6 +265,7 @@ __global__ void testDeath(Agent* agents, curandState* states, SimulationParamete
 	if ((i < sim[0].nAgentsx) && (agents[i].state == 1))
 	{
 		float x = curand_uniform(&states[i]);
+		x += agents[i].vacRessist / sim[0].vaccinTimex;
 		if (x < agents[i].deathProb)
 		{
 			agents[i].state = 3; //death
@@ -220,7 +274,7 @@ __global__ void testDeath(Agent* agents, curandState* states, SimulationParamete
 	}
 }
 
-__global__ void UpdateAgents(Agent* agents, SimulationParameters* sim)
+__global__ void UpdateAgents(Agent* agents, Disease* disease, curandState* states, SimulationParameters* sim)
 {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	if (i < sim[0].nAgentsx)
@@ -234,7 +288,16 @@ __global__ void UpdateAgents(Agent* agents, SimulationParameters* sim)
 		if (agents[i].vacRessist != 0)
 		{
 			agents[i].vacRessist--;
-		}		
+		}
+		if (disease[0].mutuated != 0)
+		{
+			float x = curand_uniform(&states[i]);
+			x /= disease[0].mutuated;
+			if ((x < sim[0].convalescentToHealthyProb) && agents[i].state == 2)
+			{
+				agents[i].state = 0;
+			}
+		}
 	}
 }
 
@@ -242,11 +305,17 @@ __global__ void diseaseMutuation(Disease* disease, curandState* states, Simulati
 {
 	int i = threadIdx.x + blockIdx.x * blockDim.x;
 	float x = curand_uniform(&states[i]);
+	if (disease[0].mutuated)
+	{
+		disease[0].mutuated--;
+	}
 	if (x < sim[0].mutuationProbx)
 	{
 		x = curand_uniform(&states[i]) * 2 - 1;
 		disease[0].contagiousness += x * sim[0].mutuationIntensityx * disease[0].contagiousness;
+		disease[0].mutuated = sim[0].mutuationTime;
 	}
+	//printf("mutuationTime: %d", disease[0].mutuated);
 }
 
 __global__ void InitSeeds(curandState* states, long int seed, SimulationParameters* sim)
@@ -273,7 +342,7 @@ __global__ void InitAgents(Agent* agents, curandState* states, SimulationParamet
 	if (x < sim[0].nInfectedAgentsProcentx)
 	{
 		agents[i].state = 1;
-		agents[i].sickDaysLeft = sim[0].durationx;
+		agents[i].sickDaysLeft = sim[0].durationx - (int)((agents[i].ressistance - 0.5) * 20);
 		//printf("Start Root :(\n");
 	}
 }
@@ -282,6 +351,10 @@ __global__ void InitDiseasee(Disease* disease, SimulationParameters* sim)
 {
 	disease[0].contagiousness = sim[0].contagiousnesx;
 	disease[0].duration = sim[0].durationx;
+	if (disease[0].mutuated != 0)
+	{
+		disease[0].mutuated--;
+	}
 }
 
 __global__ void InitPlaces(Place* places, curandState* states, SimulationParameters* sim)
@@ -291,7 +364,7 @@ __global__ void InitPlaces(Place* places, curandState* states, SimulationParamet
 	places[2 * i + 1].contactFactor = curand_uniform(&states[i]) * sim[0].maxContactFactorx;
 }
 
-__global__ void SumHealthyAgents(Agent* agents, int* healthy, int BlockSize, int day, SimulationParameters* sim)
+__global__ void SumHealthyAgents(Agent* agents, int* healthy, int BlockSize, int day, SimulationParameters* sim, int BlockNum)
 {
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 	extern __shared__ int sharedHealthyAgents[];
@@ -312,14 +385,20 @@ __global__ void SumHealthyAgents(Agent* agents, int* healthy, int BlockSize, int
 			}
 			atomicAdd(&healthy[day], sharedHealthyAgents[threadIdx.x]);
 		}
-		if (i == 0)
+		__syncthreads();
+		if (i == (BlockNum - 1) * BlockSize)
 		{
-			printf("Healthy: %d\n", healthy[day]);
+			int step = 30;
+			int h = ceil((double)healthy[day] * step / (double)sim[0].nAgentsx);
+			printf(" Healthy:       |");
+			PrintSlideDev(h, step);
+			//printf("%d,   %d", healthy[day], h);
+			printf("| %d                               \n", healthy[day]);
 		}
 	}
 }
 
-__global__ void SumInfectedAgents(Agent* agents, int* infected, int BlockSize, int day, SimulationParameters* sim)
+__global__ void SumInfectedAgents(Agent* agents, int* infected, int BlockSize, int day, SimulationParameters* sim, int BlockNum)
 {
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 	extern __shared__ int sharedInfectedAgents[];
@@ -340,14 +419,20 @@ __global__ void SumInfectedAgents(Agent* agents, int* infected, int BlockSize, i
 			}
 			atomicAdd(&infected[day], sharedInfectedAgents[threadIdx.x]);
 		}
-		if (i == 0)
+		__syncthreads();
+		if (i == (BlockNum - 1) * BlockSize)
 		{
-			printf("Infected: %d\n", infected[day]);
+			int step = 30;
+			int h = ceil((double)infected[day] * step / (double)sim[0].nAgentsx);
+			printf(" Infected:      |");
+			PrintSlideDev(h, step);
+			//printf("%d,   %d", infected[day], h);
+			printf("| %d                               \n", infected[day]);
 		}
 	}
 }
 
-__global__ void SumConvalescentAgents(Agent* agents, int* convalescent, int BlockSize, int day, SimulationParameters* sim)
+__global__ void SumConvalescentAgents(Agent* agents, int* convalescent, int BlockSize, int day, SimulationParameters* sim, int BlockNum)
 {
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 	extern __shared__ int sharedConvalescentAgents[];
@@ -368,14 +453,20 @@ __global__ void SumConvalescentAgents(Agent* agents, int* convalescent, int Bloc
 			}
 			atomicAdd(&convalescent[day], sharedConvalescentAgents[threadIdx.x]);
 		}
-		if (i == 0)
+		__syncthreads();
+		if (i == (BlockNum - 1) * BlockSize)
 		{
-			printf("Convalescent: %d\n", convalescent[day]);
+			int step = 30;
+			int h = ceil((double)convalescent[day] * step / (double)sim[0].nAgentsx);
+			printf(" Convalescent:  |");
+			PrintSlideDev(h, step);
+			//printf("%d,   %d", convalescent[day], h);
+			printf("| %d                               \n", convalescent[day]);
 		}
 	}
 }
 
-__global__ void SumDiedAgents(Agent* agents, int* died, int BlockSize, int day, SimulationParameters* sim)
+__global__ void SumDiedAgents(Agent* agents, int* died, int BlockSize, int day, SimulationParameters* sim, int BlockNum)
 {
 	int i = threadIdx.x + blockDim.x * blockIdx.x;
 	extern __shared__ int sharedDiedAgents[];
@@ -396,9 +487,15 @@ __global__ void SumDiedAgents(Agent* agents, int* died, int BlockSize, int day, 
 			}
 			atomicAdd(&died[day], sharedDiedAgents[threadIdx.x]);
 		}
-		if (i == 0)
+		__syncthreads();
+		if (i == (BlockNum - 1) * BlockSize)
 		{
-			printf("Dead: %d\n", died[day]);
+			int step = 30;
+			int h = ceil((double)died[day] * step / (double)sim[0].nAgentsx);
+			printf(" Dead:          |");
+			PrintSlideDev(h, step);
+			//printf("%d,   %d", died[day], h);
+			printf("| %d                               \n", died[day]);
 		}
 	}
 }
@@ -453,7 +550,7 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	int* healthyDev;
 	int* convalescentDev;
 	int* deadDev;
-	size_t OutputSize = sizeof(int) * sim[0].simTimex;
+	size_t OutputSize = sizeof(int) * sim[0].simTimex + 1;
 	cudaMalloc((void**)&infectedDev, OutputSize);
 	cudaMalloc((void**)&healthyDev, OutputSize);
 	cudaMalloc((void**)&convalescentDev, OutputSize);
@@ -476,55 +573,64 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	InitPlaces << <BlockNum, 1 >> > (places, states, simDev);
 	cudaDeviceSynchronize();
 
-	SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthyDev, BlockSize, 0, simDev);
+	SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthyDev, BlockSize, 0, simDev, BlockNum);
 	cudaDeviceSynchronize();
-	SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infectedDev, BlockSize, 0, simDev);
+	SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infectedDev, BlockSize, 0, simDev, BlockNum);
 	cudaDeviceSynchronize();
-	SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescentDev, BlockSize, 0, simDev);
+	SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescentDev, BlockSize, 0, simDev, BlockNum);
 	cudaDeviceSynchronize();
-	SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, deadDev, BlockSize, 0, simDev);
+	SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, deadDev, BlockSize, 0, simDev, BlockNum);
 	cudaDeviceSynchronize();
 
-	
+	gotoxy(1, 2);
 	size_t sharedSize = BlockSize * sizeof(Agent) + sizeof(Disease) + sizeof(Place) * 2 + sizeof(int);
 	auto t3 = std::chrono::steady_clock::now();
-	for (int i = 1; i < simTime + 1; i++)
+	for (int i = 1; i < sim[0].simTimex + 1; i++)
 	{
 		auto t1 = std::chrono::steady_clock::now();
-		printf("Day %d\\%d: \n", i, sim[0].simTimex);
-		for (int dayPart = 0; dayPart < nJourney; dayPart++)
+		printf("Day %d\\%d:                                               \n", i, sim[0].simTimex);
+		for (int dayPart = 0; dayPart < sim[0].nJourneyx; dayPart++)
 		{
 			DefineBorders << <BlockNum, 1 >> > (borders, BlockSize, states);
 			cudaDeviceSynchronize();
 			InfectionTest << <BlockNum, BlockSize, sharedSize >> > (agents, disease, places, states, borders, BlockSize, simDev);
 			cudaDeviceSynchronize();
-			BitonicShuffler << <BlockNum, BlockSize >> > (agents, states, simDev);
+			for (int j = 0; j < sim[0].nGroupsx; j++)
+			{
+				BitonicShufflerForIndividualGroups << <BlockNum, BlockSize >> > (agents, states, simDev, j);
+			}	
 			cudaDeviceSynchronize();
 		}
+		if (i % 7 == 0)
+		{
+			BitonicShuffler << <BlockNum, BlockSize >> > (agents, states, simDev);
+		}	
 		//change states
 		MaskingAgents << <BlockNum, BlockSize >> > (agents, states, simDev);
+		cudaDeviceSynchronize();
 		VaccinatingAgents << <BlockNum, BlockSize >> > (agents, states, simDev);
 		cudaDeviceSynchronize();
 		testDeath << <BlockNum, BlockSize >> > (agents, states, simDev);
 		cudaDeviceSynchronize();
 		diseaseMutuation << <1, 1 >> > (disease, states, simDev);
 		cudaDeviceSynchronize();
-		UpdateAgents << <BlockNum, BlockSize >> > (agents, simDev);
+		UpdateAgents << <BlockNum, BlockSize >> > (agents, disease, states, simDev);
 		cudaDeviceSynchronize();
 		
 		//Get outputs
-		SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthyDev, BlockSize, i, simDev);
+		SumHealthyAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, healthyDev, BlockSize, i, simDev, BlockNum);
 		cudaDeviceSynchronize();
-		SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infectedDev, BlockSize, i, simDev);
+		SumInfectedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, infectedDev, BlockSize, i, simDev, BlockNum);
 		cudaDeviceSynchronize();
-		SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescentDev, BlockSize, i, simDev);
+		SumConvalescentAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, convalescentDev, BlockSize, i, simDev, BlockNum);
 		cudaDeviceSynchronize();
-		SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, deadDev, BlockSize, i, simDev);
+		SumDiedAgents << <BlockNum, BlockSize, BlockSize * sizeof(int) >> > (agents, deadDev, BlockSize, i, simDev, BlockNum);
 		cudaDeviceSynchronize();
 
 		auto t2 = std::chrono::steady_clock::now();
 		std::cout << "One Loop Time [ms]:" << (float)std::chrono::duration_cast<std::chrono::nanoseconds>(t2 - t1).count() / 1000000 << "\n";
-		printf("\n");
+		gotoxy(1, 2);
+		//printf("\n");
 	}
 	cudaDeviceSynchronize();
 	auto t4 = std::chrono::steady_clock::now();
@@ -537,37 +643,56 @@ __host__ void SimulationGPU(int* healthy, int* infected, int* convalescent, int*
 	cudaFree(agents); cudaFree(disease); cudaFree(infectedDev); cudaFree(healthyDev); cudaFree(convalescentDev); cudaFree(deadDev); cudaFree(states); cudaFree(places);
 }
 
+void SaveOutputs(int* healthy, int* infected, int* convalescent, int* died, SimulationParameters* sim)
+{
+	std::string r = "Healthy,Infected,Convalescent,Dead\n";
+	for (int i = 0; i < sim[0].simTimex + 1; i++)
+	{
+		r += std::to_string(healthy[i]) + ",";
+		r += std::to_string(infected[i]) + ",";
+		r += std::to_string(convalescent[i]) + ",";
+		r += std::to_string(died[i]) + "\n";
+	}
+
+	std::ofstream outfile("outputs.txt");
+	outfile << r;
+	outfile.close();
+}
+
 __host__ void SetSimParameters(SimulationParameters &sim)
 {
 	// Simulation parameters ------------------------------------------
-	sim.nAgentsx = pow(2, 11);
-	sim.simTimex = 365;
-	sim.vaccinTimex = 365;
-	sim.nJourneyx = 3;
-	sim.nInfectedAgentsProcentx = 0.01;
-	sim.maskEffectivnessx = 0.5;
+	sim.nAgentsx = pow(2, 10);               // defines number of agents (for GPU it has to be 2^n because of the BitonicShuffler function)
+	sim.simTimex = 3 * 365;                 // defines how many days program should simulate
+	sim.vaccinTimex = 365;                 // defines vaccination's influence's duration
+	sim.nJourneyx = 3;                    // defines how many places agents visit each day
+	sim.nInfectedAgentsProcentx = 0.001; // defines how big procent of agents are infected by the disease
+	sim.maskEffectivnessx = 0.3;        // defines effectivness of wearing mask
+	sim.nGroupsx = 16;
 	
 	// Agents boundaries ----------------------------------------------
-	sim.maxDeathProbbx = 0.01;
-	sim.maxInfectProbx = 0.05;
-	sim.maxAgentRessistancex = 0.7;
-	sim.maxMaskSwapProbx = 0.1;
-	sim.maxVaccinationProbx = 0.2;
+	sim.maxDeathProbbx = 0.001;       // max death probability
+	sim.maxInfectProbx = 0.005;       // max probability that agent infect someone other
+	sim.maxAgentRessistancex = 0.7; // max ressistance which agent could have
+	sim.maxMaskSwapProbx = 1;   // max chance for maskSwap 
+	sim.maxVaccinationProbx = 1;  // max chance for beeing vaccinated
 
 	// Disease parameters ----------------------------------------------
-	sim.mutuationProbx = 0.005;
-	sim.mutuationIntensityx = 0.1;
-	sim.contagiousnesx = 0.05;
-	sim.durationx = 14;
+	sim.mutuationProbx = 0.003;                // chance for disease's mutuation
+	sim.mutuationIntensityx = 1;            // defines how much mutuation of disease changes the disease
+	sim.contagiousnesx = 0.005;               // defines contagiousnes of disease (this parameter has impact on probability of beeing infected)
+	sim.durationx = 9;                     // average duration of beeing infected
+	sim.mutuationTime = 4;                // defines how many days the rule about changing state from convalescent to healthy works after disease's mutuation 
+	sim.convalescentToHealthyProb = 0.05; // defines chance for changing state from convalescent to healthy after disease's mutuation
 
 	// Places parameters -----------------------------------------------
-	sim.maxContactFactorx = 0.1;
-	sim.nPlacesCPUx = 2;
+	sim.maxContactFactorx = 0.005;  // Defines max contactFactor which have impact for getting infected chance 
+	sim.nPlacesCPUx = 2;        // Number of places for CPU simulation. Capacity = nAgents / nPlacesCPU
 }
 
 int main()
 {
-	bool GPU_ON = false; //if true, simulation will be turned on on the GPU
+	bool GPU_ON = 0; //if true, simulation will be turned on on the GPU
 	SimulationParameters* SIM = new SimulationParameters;
 	SetSimParameters(SIM[0]);
 
@@ -587,6 +712,8 @@ int main()
 
 	clear();
 	PrintOutputs(healthy, infected, convalescent, dead, SIM);
+	SaveOutputs(healthy, infected, convalescent, dead, SIM);
+
 
 	delete[] infected;
 	delete[] healthy;

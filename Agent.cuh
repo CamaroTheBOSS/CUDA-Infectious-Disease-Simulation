@@ -1,4 +1,3 @@
-#include "parameters.h"
 #include "randomf.h"
 
 struct Agent

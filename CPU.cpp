@@ -56,7 +56,7 @@ void SumOutputs(Agent* agents, int* healthy, int* infected, int* convalescent, i
 	}
 }
 
-void updateAgents(Agent* agents, SimulationParameters* sim)
+void updateAgents(Agent* agents, Disease disease, SimulationParameters* sim)
 {
 	int i;
 	int size = sim[0].nAgentsx;
@@ -73,16 +73,30 @@ void updateAgents(Agent* agents, SimulationParameters* sim)
 		{
 			agents[i].vacRessist--;
 		}
+		if (disease.mutuated != 0)
+		{
+			float x = floatRand(0, 1);
+			x /= disease.mutuated;
+			if ((x < sim[0].convalescentToHealthyProb) && agents[i].state == 2)
+			{
+				agents[i].state = 0;
+			}
+		}
 	}
 }
 
 void DiseaseMutuation(Disease& disease, SimulationParameters* sim)
 {
 	float x = floatRand(0, 1);
+	if (disease.mutuated)
+	{
+		disease.mutuated--;
+	}
 	if (x < sim[0].mutuationProbx)
 	{
 		x = floatRand(-sim[0].mutuationIntensityx, sim[0].mutuationIntensityx);
 		disease.contagiousness += x * disease.contagiousness;
+		disease.mutuated = sim[0].mutuationTime;
 	}
 }
 
@@ -97,6 +111,7 @@ void TestDeath(Agent* agents, SimulationParameters* sim)
 		if (agents[i].state == 1)
 		{
 			x = floatRand(0, 1);
+			x += agents[i].vacRessist / sim[0].vaccinTimex;
 			if (x < agents[i].deathProb)
 			{
 				agents[i].state = 3; //death
@@ -117,10 +132,10 @@ void MaskingVaccinAgents(Agent* agents, SimulationParameters* sim)
 		x = floatRand(0, 1);
 		if (x < agents[i].swapMaskProb)
 		{
-			if (agents[i].masked)
-				agents[i].masked = false;
-			else
-				agents[i].masked = true;
+			//if (agents[i].masked)
+				//agents[i].masked = false;
+			//else
+			agents[i].masked = true;
 		}
 
 		x = floatRand(0, 1);
@@ -137,7 +152,7 @@ float TestAgent(Agent agent, float infProb, SimulationParameters* sim)
 
 	float ressistanceComponent = agent.ressistance * infProb;
 	float vacRessist = infProb * agent.vacRessist / sim[0].vaccinTimex;
-	infProb -= ressistanceComponent + vacRessist;
+	infProb += ressistanceComponent + vacRessist;
 	if (x > infProb)
 	{
 		return 0;
@@ -199,7 +214,7 @@ void InfectionTest(Agent* agents, Disease disease, Place* places, SimulationPara
 			if (TestAgent(agents[i], infectionprob, sim))
 			{
 				agents[i].state = 1;
-				agents[i].sickDaysLeft = sim[0].durationx;
+				agents[i].sickDaysLeft = sim[0].durationx - (int)((agents[i].ressistance - 0.5) * 20);
 				//printf("Im sick :(\n");
 			}
 		}
@@ -223,7 +238,7 @@ int InitAgents(Agent* agents, SimulationParameters* sim)
 		if (x < sim[0].nInfectedAgentsProcentx)
 		{
 			agents[i].state = 1;
-			agents[i].sickDaysLeft = sim[0].durationx;
+			agents[i].sickDaysLeft = sim[0].durationx - (int)((agents[i].ressistance - 0.5) * 20);
 		}
 	}
 }
@@ -316,10 +331,10 @@ std::set<int> SetCpy(std::set<int> s)
 	return scpy;
 }
 
-std::set<int> DefineSetOfInts(int maxInt)
+std::set<int> DefineSetOfInts(int minInt, int maxInt)
 {
 	std::set<int> s;
-	for (int i = 0; i < maxInt; i++)
+	for (int i = minInt; i < maxInt; i++)
 	{
 		s.insert(i);
 	}
@@ -365,25 +380,21 @@ void PrintSliders(int* healthy, int* infected, int* convalescent, int* dead, int
 	int c = ceil(convalescent[day] * step / sim[0].nAgentsx);
 	int d = ceil(dead[day] * step / sim[0].nAgentsx);
 
-	printf(" Healthy:       |                  ");
-	gotoxy(18, 3);
+	printf(" Healthy:       |");
 	PrintSlide(h, step);
-	printf("|\n");
+	printf("| %d          \n", healthy[day]);
 
-	printf(" Infected:      |                  ");
-	gotoxy(18, 4);
+	printf(" Infected:      |");
 	PrintSlide(i, step);
-	printf("|\n");
+	printf("| %d          \n", infected[day]);
 
-	printf(" Convalescent:  |                  ");
-	gotoxy(18, 5);
+	printf(" Convalescent:  |");
 	PrintSlide(c, step);
-	printf("|\n");
+	printf("| %d          \n", convalescent[day]);
 
-	printf(" Dead:          |                  ");
-	gotoxy(18, 6);
+	printf(" Dead:          |");
 	PrintSlide(d, step);
-	printf("|\n");
+	printf("| %d          \n", dead[day]);
 
 	gotoxy(1, 1);
 }
@@ -399,7 +410,8 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 
 	disease.duration = sim[0].durationx;
 	disease.contagiousness = sim[0].contagiousnesx;
-	std::set<int> set = DefineSetOfInts(sim[0].nAgentsx);
+	std::set<int> set = DefineSetOfInts(0, sim[0].nAgentsx);
+
 	InitSeeds(seeds);
 	InitAgents(agents, sim);
 	InitPlaces(places, sim);
@@ -410,16 +422,25 @@ void SimulationCPU(int* healthy, int* infected, int* convalescent, int* dead, Si
 	{
 		auto t1 = std::chrono::steady_clock::now();
 		printf(" Day %d\\%d: \n", i, sim[0].simTimex);
-		for (int dayPart = 0; dayPart < nJourney; dayPart++)
+		for (int dayPart = 0; dayPart < sim[0].nJourneyx; dayPart++)
 		{
 			InfectionTest(agents, disease, places, sim);
 			//QuickSortShuffler(agents, 0, sim[0].nAgentsx);
+			int j;
+#pragma omp parallel for shared(sim, agents), private(j)
+			for (j = 0; j < sim[0].nGroupsx; j++)
+			{
+				QuickSortShuffler(agents, j * sim[0].nAgentsx / sim[0].nGroupsx, (j + 1) * sim[0].nAgentsx / sim[0].nGroupsx);
+			}
+		}
+		if (i % 7 == 0)
+		{
 			ShuffleWithSet(agents, set, sim);
 		}
 		MaskingVaccinAgents(agents, sim);
 		TestDeath(agents, sim);
 		DiseaseMutuation(disease, sim);
-		updateAgents(agents, sim);
+		updateAgents(agents, disease, sim);
 
 		SumOutputs(agents, healthy, infected, convalescent, dead, i, sim);
 		auto t2 = std::chrono::steady_clock::now();
