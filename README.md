@@ -1,11 +1,13 @@
 # CUDA-Infectious-Disease-Simulation
 
-1. Introduction
+1.0 Introduction
+
   Infectious disease's spreading simulation is leading topic today. In case of more complex models is possible to forecast diesease's
   spreading that could help in preparing for next epidemic waves. Creating model on GPU could make the simulation more real,
   because it can simulate bigger society (more agents at the same time)
   
-2. Program description
+  
+2.0 Program description
   
   Program structure is quite simple. Class SimulationParameters gives most important simulation's parameters like number
   of simulated agents (agents are contained in dynamic table) or number of simulated days. Each agent is a structure having their
