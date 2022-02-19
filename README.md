@@ -37,4 +37,63 @@
   Whole program is working based on two nested loops. The exterior loop tells us about day, but interior loop tells us about
   number of place to visit in specific day. Program output is table with number of healthy, infected, convalescent and dead
   agents. Program on GPU is working in parallel of course. Program on CPU is supported with parallel computations, because of the
-  OpenMP library.
+  OpenMP library. Finally the results are saved in file and we can display them in simple python script using matplotlib
+  and pandas libraries.
+  
+  
+3.0 Infection system
+  
+  Each day agents are visiting n places (depends on simulation parameters). In each visited place they interact with each other.
+  Agents from place x have interactions with another agents from place x etc. Healthy agents in place x could by infected
+  by infected agents in place x. Agent infection probability depends on disease's contagiousness, number of infected agents in
+  specific place, parameters which tells us about a probability of infect someone other by the specific agent, specific place's
+  contact factor, whether infected agents wear masks, personal ressistance of each agent and whether agent is vaccinated.
+  If infection test is positive agent changes his status from healthy to infected and is assigned to him time (in days) to 
+  recovery. After this time agents changes his status from infected to convalescent. Moreover each day for infected agents is
+  tested death probability. If is positive agent changes his status from infected to dead.
+  
+  Convacelscent agents cannot get infected, but in program disease's mutuations are simulated. After mutuation not only the 
+  disease's contagiousness is changing, but more important, some of the convalescent agents might change their status to healthy
+  and they have another change for getting infected one more time.
+  
+  
+ 4.0 Simulation's parameters description
+ 
+  It is possible to change simulation parameters in main file parallel.cu in SetSimParameters() function:
+  
+  General simulation's parameters:
+  nAgentsx - tells us about numebr of simulated agents (on GPU it has to be 2^n because of the BitonicShuffler),
+  simTimex - tells us about number of simulated days,
+  vaccinTimex - tells us about vaccination's effectivness (time of protection (fresh vaccinations have better protection than
+  elder vaccinations)),
+  nJourneyx - tells us about number of visited places each day,
+  nInfectedAgentsProcentx - tells us about % of agents who are infected at the start of the simulation,
+  nGroupsx - tells us about number of micro groups, the agents are part of (on GPU it has to be 2^n because of the
+  BitonicShuffler).
+  
+  Agents borders:
+  
+  maxDeathProbbx - tells us about max probability of death when being infected which agent can assume during initialization,
+  maxInfectProbx - tells us about max probability of infect someone other when being infected which agent can assume during
+  initialization,
+  maxAgentRessistancex - tells us about max ressistance which agent can assume during initialization,
+  maxSwapProbx - tells us about max probability of wearing mask by agents after each day,
+  maskEffectivnessx - effectivness of being masked,
+  maxVaccinationProbx - tells us about max probability of being vaccinated each day (when is not vaccinated) which agent can
+  assume during initialization.
+  
+  Disease's parameters:
+  
+  mutuationProbx - change for disease's mutuation,
+  mutuationIntensityx - intensity of each mutuation,
+  contagiousnesx - contagiousness of disease,
+  durationx - average duration of being infected,
+  mutationTime - time (in days) during which agents might change their state from convalescent to healthy (initializate after
+  each mutuation),
+  convalescentToHealthyProb - probability of changing state from convalescent to healthy in mutuationTime after disease's
+  mutuation.
+  
+  Visited places parameters:
+  
+  maxContactFactorx - tells us about max contact factor that place can assume during initialization,
+  nPlacesCPUx (only for CPU) - tells us about number of simulated places agents can visit.
