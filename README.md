@@ -78,7 +78,7 @@
   initialization,\
   maxAgentRessistancex - tells us about max ressistance which agent can assume during initialization,\
   maxSwapProbx - tells us about max probability of wearing mask by agents after each day,\
-  maskEffectivnessx - effectivness of being masked,\
+  maskEfficiency - effectivness of being masked,\
   maxVaccinationProbx - tells us about max probability of being vaccinated each day (when is not vaccinated) which agent can
   assume during initialization.
   
@@ -113,24 +113,28 @@
 
   Results are presented on chart:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803302-e4275727-7d33-4f64-942d-61812b93ad72.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803302-e4275727-7d33-4f64-942d-61812b93ad72.png)\
+  Draw 2: Results of simulation for 1024 agents on CPU
   
   Simulation time oscilate between 30 and 50ms for each day. It means that this simulation took 40sec. For comparation
   the simulation below is performed on GPU with the same parameters:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803334-6591cf67-a9a4-433c-bc94-003923306786.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803334-6591cf67-a9a4-433c-bc94-003923306786.png)\
+  Draw 3: Results of simulation for 1024 agents on GPU
   
   It is worth to say that results could be diffrent because of the random character of the simulation. Time of this simulation
   oscilate between 13 and 14ms for each day. It means that this simulation took 14.5sec. It is significant acceleration, 
   but the number of agents are too little for showing the whole advantage of using GPU for this simulation. Below I have shown
   results that tells us about border of both solutions:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803347-4c7b5fc1-4fb2-4ece-8ce7-da82ab94f937.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803347-4c7b5fc1-4fb2-4ece-8ce7-da82ab94f937.png)\
+  Draw 4: Results of simulation for 4096 agents on CPU
   
   Simulation time oscilate between 580ms and 800ms, so whole simulation took 11.5min. It is too long time relative to number
-  of simulated agents. Below I have shown simulation for GPU:
+  of simulated agents. Below I have shown simulation on GPU:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803360-e8825900-b5d7-43f7-af8b-d970378b4425.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803360-e8825900-b5d7-43f7-af8b-d970378b4425.png)\
+  Draw 5: Results of simulation for 1048576 agents on GPU
   
   Simulation time oscilate between 700 and 800ms, so for 1095 simulated days it took 13.5min for whole simulation. 2 min longer
   than on CPU, but with 250 times more simulated agents. The conclusion is that in case of simulating systems with a lot of 
@@ -142,27 +146,33 @@
   Below I have shown simulation for maxMaskSwapProbx = 0, maxVaccinationProbx = 0 and for maxMaskSwapProbx = 1, 
   maxVaccinationProbx = 1.
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803369-d1e9a58e-e078-4120-9e5f-61af3b6d8d1d.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803369-d1e9a58e-e078-4120-9e5f-61af3b6d8d1d.png)\
+  Draw 6: Results of simulation for maxMaskSwapProbx=0 and maxVaccinationProbx=0 for 131072 agents on GPU
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803375-ad987c08-2f5f-47f0-a1da-de1d7fb1f669.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803375-ad987c08-2f5f-47f0-a1da-de1d7fb1f669.png)\
+  Draw 7: Results of simulation for maxMaskSwapProbx=1 and maxVaccinationProbx=1 for 131072 agents on GPU
   
   We can see that in simulation without masks and vaccination first wave of epidemic is longer, harder to suppress. In the
   second case, with big % of masked and vaccinated peoople, next waves disappear faster. Below I have shown similar simulation
   with perfect effectivness of masks:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803383-aecb14fc-821d-4cd5-9c53-be95e02ddfb5.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803383-aecb14fc-821d-4cd5-9c53-be95e02ddfb5.png)\
+  Draw 8: Results of simulation for maxMaskSwapProbx=1, maxVaccinationProbx=1 and maskEfficiency=1 for 131072 agents on GPU
   
   If masks were perfect solution (100% effectivness) and for big % of masked agents, after first wave the long stagnation would
-  occur and disease would be defeated. Below I have shown simulation of society with decreased ressistance (0.3 - 0.5):
+  occur and disease would be defeated. Below I have shown simulation of society with decreased ressistance (from 0.5 to 0.3):
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803392-dfe0ab1f-035a-4c8a-92cc-2a2997854850.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803392-dfe0ab1f-035a-4c8a-92cc-2a2997854850.png)\
+  Draw 9: Results of simulation for maxMaskSwapProbx=1, maxVaccinationProbx=1 and maxRessistance=0.3 for 131072 agents on GPU
   
   We can see that society with decreased ressistance is more susceptible for being infected. Next waves are stronger, number
   of death agents is bigger. The conclusion is that it is important to take care about ourself, about physical health and 
   mental health, diet and higiene. By doing these things we can become more ressistant for disease. Below I have shown results
   of simulation in case of two times longer time of disease's duration when being infected:
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803396-bf682082-2438-48c2-90e6-9bd5a0f6e5cf.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803396-bf682082-2438-48c2-90e6-9bd5a0f6e5cf.png)\
+  Draw 10: Results of simulation for maxMaskSwapProbx=1, maxVaccinationProbx=1, durationx=18 and mutuationTime=8 for 131072 
+  agents on GPU
   
   Making disease longer deepened problem of next waves significantly. The conclusion is that in case of virus detection in
   ourselfs it is important to take care about ourself, relax and go for quarantine.
