@@ -61,7 +61,7 @@
  
   It is possible to change simulation parameters in main file parallel.cu in SetSimParameters() function:
   
-  General simulation's parameters:\
+  #### General simulation's parameters:\
   nAgentsx - tells us about numebr of simulated agents (on GPU it has to be 2^n because of the BitonicShuffler),\
   simTimex - tells us about number of simulated days,\
   vaccinTimex - tells us about vaccination's effectivness (time of protection (fresh vaccinations have better protection than
@@ -71,7 +71,7 @@
   nGroupsx - tells us about number of micro groups, the agents are part of (on GPU it has to be 2^n because of the
   BitonicShuffler).
   
-  Agents borders:
+  #### Agents borders:
   
   maxDeathProbbx - tells us about max probability of death when being infected which agent can assume during initialization,\
   maxInfectProbx - tells us about max probability of infect someone other when being infected which agent can assume during
@@ -82,7 +82,7 @@
   maxVaccinationProbx - tells us about max probability of being vaccinated each day (when is not vaccinated) which agent can
   assume during initialization.
   
-  Disease's parameters:
+  #### Disease's parameters:
   
   mutuationProbx - change for disease's mutuation,\
   mutuationIntensityx - intensity of each mutuation,\
@@ -93,7 +93,7 @@
   convalescentToHealthyProb - probability of changing state from convalescent to healthy in mutuationTime after disease's
   mutuation.
   
-  Visited places parameters:
+  #### Visited places parameters:
   
   maxContactFactorx - tells us about max contact factor that place can assume during initialization,\
   nPlacesCPUx (only for CPU) - tells us about number of simulated places agents can visit.
