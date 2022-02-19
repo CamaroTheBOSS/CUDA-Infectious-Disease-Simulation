@@ -7,7 +7,7 @@
   because it can simulate bigger society (more agents at the same time)
   
   
-2.0 Program description
+## 2.0 Program description
 
   Program structure is quite simple. Class SimulationParameters gives most important simulation's parameters like number
   of simulated agents (agents are contained in dynamic table) or number of simulated days. Each agent is a structure having their
@@ -41,7 +41,7 @@
   and pandas libraries.
   
   
-3.0 Infection system
+## 3.0 Infection system
   
   Each day agents are visiting n places (depends on simulation parameters). In each visited place they interact with each other.
   Agents from place x have interactions with another agents from place x etc. Healthy agents in place x could by infected
@@ -57,7 +57,7 @@
   and they have another change for getting infected one more time.
   
   
- 4.0 Simulation's parameters description
+ ## 4.0 Simulation's parameters description
  
   It is possible to change simulation parameters in main file parallel.cu in SetSimParameters() function:
   
@@ -98,12 +98,12 @@
   maxContactFactorx - tells us about max contact factor that place can assume during initialization,\
   nPlacesCPUx (only for CPU) - tells us about number of simulated places agents can visit.
 
-5.0 Testing platform:
+## 5.0 Testing platform:
 
   CPU - Intel Core i5 10400F\
   GPU -NVIDIA Geforce RTX3060 (Ampere generation)
   
-6.0 Tests which compare GPU and CPU programs:
+## 6.0 Tests which compare GPU and CPU programs:
 
   At the start the CPU simulation was tested. All the charts present dependence nAgents in specific state(specific day in 
   simulation):
@@ -141,7 +141,7 @@
   individual objects (agents etc.) it is great to use GPU for this purpose. It can give significant acceleration relative to CPU,
   so the simulatuon can give better results and be more predictive, proffesional, real.
   
-  6.0 Tests with diffrent datasets on GPU:
+  ## 7.0 Tests with diffrent datasets on GPU:
   
   Below I have shown simulation for maxMaskSwapProbx = 0, maxVaccinationProbx = 0 and for maxMaskSwapProbx = 1, 
   maxVaccinationProbx = 1.
