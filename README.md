@@ -108,7 +108,8 @@
   At the start the CPU simulation was tested. All the charts present dependence nAgents in specific state(specific day in 
   simulation):
   
-  ![image](https://user-images.githubusercontent.com/67116759/154803283-c2b3a227-e52b-4052-b94b-b27bec13cd54.png)
+  ![image](https://user-images.githubusercontent.com/67116759/154803283-c2b3a227-e52b-4052-b94b-b27bec13cd54.png)\
+  Draw 1: Tested simulation's parameters
 
   Results are presented on chart:
   
