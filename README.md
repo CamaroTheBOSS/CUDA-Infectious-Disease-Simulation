@@ -8,6 +8,7 @@
   
   
 2.0 Program description
+
   Program structure is quite simple. Class SimulationParameters gives most important simulation's parameters like number
   of simulated agents (agents are contained in dynamic table) or number of simulated days. Each agent is a structure having their
   own features like probability of infect someone other or probability of death when being infected.
