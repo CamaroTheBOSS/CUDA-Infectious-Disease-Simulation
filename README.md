@@ -97,3 +97,71 @@
   
   maxContactFactorx - tells us about max contact factor that place can assume during initialization,\
   nPlacesCPUx (only for CPU) - tells us about number of simulated places agents can visit.
+
+5.0 Testing platform:
+
+  CPU - Intel Core i5 10400F\
+  GPU -NVIDIA Geforce RTX3060 (Ampere generation)
+  
+6.0 Tests which compare GPU and CPU programs:
+
+  At the start the CPU simulation was tested. All the charts present dependence nAgents in specific state(specific day in 
+  simulation):
+  
+  
+  
+  Results are presented on chart:
+  
+  CHART XD
+  
+  Simulation time oscilate between 30 and 50ms for each day. It means that this simulation took 40sec. For comparation
+  the simulation below is performed on GPU with the same parameters:
+  
+  ZDJECIE XD
+  
+  It is worth to say that results could be diffrent because of the random character of the simulation. Time of this simulation
+  oscilate between 13 and 14ms for each day. It means that this simulation took 14.5sec. It is significant acceleration, 
+  but the number of agents are too little for showing the whole advantage of using GPU for this simulation. Below I have shown
+  results that tells us about border of both solutions:
+  
+  ZDJECEI XD
+  
+  Simulation time oscilate between 580ms and 800ms, so whole simulation took 11.5min. It is too long time relative to number
+  of simulated agents. Below I have shown simulation for GPU:
+  
+  ZDJECIE XD
+  
+  Simulation time oscilate between 700 and 800ms, so for 1095 simulated days it took 13.5min for whole simulation. 2 min longer
+  than on CPU, but with 250 times more simulated agents. The conclusion is that in case of simulating systems with a lot of 
+  individual objects (agents etc.) it is great to use GPU for this purpose. It can give significant acceleration relative to CPU,
+  so the simulatuon can give better results and be more predictive, proffesional, real.
+  
+  6.0 Tests with diffrent datasets on GPU:
+  
+  Below I have shown simulation for maxMaskSwapProbx = 0, maxVaccinationProbx = 0 and for maxMaskSwapProbx = 1, 
+  maxVaccinationProbx = 1.
+  
+  ZJDECIE XD
+  
+  ZDJECIE XD
+  
+  We can see that in simulation without masks and vaccination first wave of epidemic is longer, harder to suppress. In the
+  second case, with big % of masked and vaccinated peoople, next waves disappear faster. Below I have shown similar simulation
+  with perfect effectivness of masks:
+  
+  ZDJECEI XD
+  
+  If masks were perfect solution (100% effectivness) and for big % of masked agents, after first wave the long stagnation would
+  occur and disease would be defeated. Below I have shown simulation of society with decreased ressistance (0.3 - 0.5):
+  
+  ZDJECIE XD
+  
+  We can see that society with decreased ressistance is more susceptible for being infected. Next waves are stronger, number
+  of death agents is bigger. The conclusion is that it is important to take care about ourself, about physical health and 
+  mental health, diet and higiene. By doing these things we can become more ressistant for disease. Below I have shown results
+  of simulation in case of two times longer time of disease's duration when being infected:
+  
+  ZDJECIE XD
+  
+  Making disease longer deepened problem of next waves significantly. The conclusion is that in case of virus detection in
+  ourselfs it is important to take care about ourself, relax and go for quarantine.
