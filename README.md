@@ -1,6 +1,6 @@
 # CUDA-Infectious-Disease-Simulation
 
-1.0 Introduction
+## 1.0 Introduction
 
   Infectious disease's spreading simulation is leading topic today. In case of more complex models is possible to forecast diesease's
   spreading that could help in preparing for next epidemic waves. Creating model on GPU could make the simulation more real,
