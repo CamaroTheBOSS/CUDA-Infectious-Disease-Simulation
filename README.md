@@ -61,7 +61,7 @@
  
   It is possible to change simulation parameters in main file parallel.cu in SetSimParameters() function:
   
-  #### General simulation's parameters:\
+  #### General simulation's parameters:
   nAgentsx - tells us about numebr of simulated agents (on GPU it has to be 2^n because of the BitonicShuffler),\
   simTimex - tells us about number of simulated days,\
   vaccinTimex - tells us about vaccination's effectivness (time of protection (fresh vaccinations have better protection than
