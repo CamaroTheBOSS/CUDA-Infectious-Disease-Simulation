@@ -4,7 +4,8 @@
 
   Infectious disease's spreading simulation is leading topic today. In case of more complex models is possible to forecast diesease's
   spreading that could help in preparing for next epidemic waves. Creating model on GPU could make the simulation more real,
-  because it can simulate bigger society (more agents at the same time)
+  because it can simulate bigger society (more agents at the same time). Simple Youtube presentation has been prepared in link below:
+  https://youtu.be/3r2PNZb0y3s
   
   
 ## 2.0 Program description
